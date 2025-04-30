@@ -1,5 +1,3 @@
-// spectator.js
-
 const duelId = new URLSearchParams(window.location.search).get('duelId');
 const backendUrl = 'https://duel-bot-backend-production.up.railway.app';
 
@@ -33,7 +31,7 @@ function renderPlayer(playerKey, playerData) {
   hand.innerHTML = '';
 
   playerData.field.forEach(card => field.appendChild(renderCard(card.cardId, false)));
-  playerData.hand.forEach(card => hand.appendChild(renderCard('000', true))); // Show face-down
+  playerData.hand.forEach(() => hand.appendChild(renderCard('000_WinterlandDeathDeck_Back', true)));
 }
 
 function renderCard(cardId, isFaceDown) {
@@ -48,7 +46,10 @@ function renderCard(cardId, isFaceDown) {
     img.src = 'images/cards/000_WinterlandDeathDeck_Back.png';
     name.textContent = '';
   } else {
-    img.src = `images/cards/${cardId}_CardName_Type.png`; // Match your naming convention
+    img.src = `images/cards/${cardId}.png`;
+    img.onerror = () => {
+      img.src = 'images/cards/000_WinterlandDeathDeck_Back.png';
+    };
     name.textContent = cardId;
   }
 
