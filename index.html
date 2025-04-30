@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <title>DayZ CCG - Spectator View</title>
-  <link rel="stylesheet" href="spectator.css">
+  <link rel="stylesheet" href="styles/spectator.css">
 </head>
 <body>
   <div id="background"></div>
@@ -11,9 +11,10 @@
   <div class="spectator-header">
     <h1>Spectator View</h1>
     <p id="spectator-status">Waiting for match...</p>
+    <p id="watching-count">Spectators Watching: 0</p> <!-- NEW: Spectator count -->
   </div>
 
-  <!-- NEW: Display whose turn it is -->
+  <!-- Current Turn Display -->
   <p id="turn-display" style="text-align:center; color:white; font-size: 18px;"></p>
 
   <div class="duel-container">
@@ -32,6 +33,6 @@
     </div>
   </div>
 
-  <script type="module" src="spectator.js"></script>
+  <script type="module" src="scripts/spectator.js"></script>
 </body>
 </html>
