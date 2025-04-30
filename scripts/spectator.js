@@ -16,6 +16,7 @@ async function fetchDuelState() {
 
 function renderSpectatorView(state) {
   document.getElementById('turn-display').textContent = `Current Turn: ${state.currentPlayer}`;
+  document.getElementById('watching-count').textContent = `Spectators Watching: ${state.spectators.length}`;
 
   renderPlayer('player1', state.players.player1);
   renderPlayer('player2', state.players.player2);
@@ -58,7 +59,7 @@ function renderCard(cardId, isFaceDown) {
   return cardDiv;
 }
 
-// Optional: Spectator Join Notice (Discord-style)
+// Optional: Spectator Join Message
 const username = new URLSearchParams(window.location.search).get('user');
 if (username) {
   const msg = document.createElement('p');
@@ -69,6 +70,6 @@ if (username) {
   document.querySelector('.spectator-header').appendChild(msg);
 }
 
-// Start auto-refresh loop
+// Auto-refresh loop
 setInterval(fetchDuelState, 2000);
-fetchDuelState(); // Initial load
+fetchDuelState();
