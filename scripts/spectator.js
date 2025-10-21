@@ -4,7 +4,8 @@
   const qs = new URLSearchParams(window.location.search);
 
   // ---- IDs / params ----
-  const duelId   = qs.get('duelId') || '';
+  const mode = (qs.get('mode') || 'duel').toLowerCase();
+  const sessionId = qs.get('session') || qs.get('duelId') || '';
   const userName = qs.get('user')   || '';
 
   // Token & API base: prefer globals the HTML boot script sets, then URL, then default
@@ -89,9 +90,9 @@
     document.querySelector('.spectator-header')?.appendChild(msg);
   }
 
-  if (!duelId) {
-    setText('#spectator-status', '❌ Missing duelId in URL.');
-    console.error('[Spectator] No duelId provided.');
+  if (mode !== 'practice' && !sessionId) {
+    setText('#spectator-status', '❌ Missing session id.');
+    console.error('[Spectator] No session id provided.');
     return;
   }
 
@@ -157,7 +158,9 @@
   async function fetchDuelState() {
     try {
       // Prefer token in query string AND header; backend can pick either.
-      const url = new URL(apiUrl(`/duel/live/${encodeURIComponent(duelId)}`), location.origin);
+      const url = new URL(apiUrl('/duel/current'), location.origin);
+      if (mode !== 'practice' && sessionId) url.searchParams.set('session', sessionId);
+      url.searchParams.set('safeView', 'true'); // keep hands redacted for spectators
       if (TOKEN) url.searchParams.set('token', TOKEN);
 
       const res = await fetch(url.toString(), {
