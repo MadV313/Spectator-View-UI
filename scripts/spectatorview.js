@@ -8,12 +8,20 @@
   const sessionId = qs.get('session') || qs.get('duelId') || '';
   const userName = qs.get('user') || '';
 
-  // Token & API base: prefer globals the HTML boot script sets, then URL, then default
-  const TOKEN    = (window.PLAYER_TOKEN || qs.get('token') || '').trim();
-  const API_BASE = ((window.API_BASE || qs.get('api') || '/api') + '').replace(/\/+$/, '');
+  // Token & API base: prefer globals set by index.html boot, then URL, then default
+  const TOKEN = (window.PLAYER_TOKEN || qs.get('token') || '').trim();
 
-  // Optional image base for card art
+  // Normalize API so it always includes `/api`
+  const rawApi = (window.API_BASE || qs.get('api') || '/api').replace(/\/+$/, '');
+  const API_BASE = rawApi.endsWith('/api') ? rawApi : `${rawApi}/api`;
+
+  // Optional image base for card art (we’ll log what we resolved to)
   const IMG_BASE = ((qs.get('imgbase') || 'images/cards') + '').replace(/\/+$/, '');
+  try { console.log('[Spectator] API_BASE =', API_BASE, 'IMG_BASE =', IMG_BASE); } catch {}
+
+  // Back-of-card image (try numeric first, then named fallback)
+  const BACK_IMG_PRIMARY = `${IMG_BASE}/000.png`;
+  const BACK_IMG_FALLBACK = `${IMG_BASE}/000_WinterlandDeathDeck_Back.png`;
 
   // ---- small helpers ----
   const $ = (sel) => document.querySelector(sel);
@@ -27,58 +35,12 @@
   // Optional: visually accent practice mode
   if (mode === 'practice') document.body.classList.add('practice-mode');
 
-  /* -----------------------------------------------------------
-   * Image helpers with smart fallbacks (.png → .PNG, alt names)
-   * ---------------------------------------------------------*/
-  const EXT_FALLBACKS = ['.png', '.PNG', '.webp', '.jpg', '.jpeg'];
-
-  // back image base names we’ll try (no extension)
-  const BACK_BASES = [
-    `${IMG_BASE}/000_WinterlandDeathDeck_Back`,
-    `${IMG_BASE}/000_WinterlandDeathDeck-Back`,
-    `${IMG_BASE}/000_WinterlandDeathDeck%20Back`,
-  ];
-
-  // tiny 1x1 transparent PNG as a last resort (data URL)
-  const CLEAR_PIXEL =
-    'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAuMB9F2cK2sAAAAASUVORK5CYII=';
-
-  function trySources(img, basesNoExt, exts = EXT_FALLBACKS, finalFallback = CLEAR_PIXEL) {
-    let bi = 0, ei = 0;
-
-    function next() {
-      if (bi >= basesNoExt.length) {
-        img.onerror = null;
-        img.src = finalFallback;
-        return;
-      }
-      const src = `${basesNoExt[bi]}${exts[ei]}`;
-      img.onerror = () => {
-        ei++;
-        if (ei >= exts.length) { ei = 0; bi++; }
-        next();
-      };
-      img.src = src;
-    }
-    next();
-  }
-
-  function setCardImage(img, idStr) {
-    // for numbered cards we only need the base/id (no extension)
-    const bases = [`${IMG_BASE}/${idStr}`];
-    trySources(img, bases);
-  }
-
-  function setBackImage(img) {
-    trySources(img, BACK_BASES);
-  }
-
   // ---- Music bootstrap (only if the HTML provides the elements) ----
   (function setupBgMusic() {
     if (window.__SPEC_MUSIC_INIT__) return;
     const audio = document.getElementById('spec-bgm');
     const btn   = document.getElementById('specAudioToggle');
-    if (!audio || !btn) return; // page didn’t include the audio UI, skip
+    if (!audio || !btn) return;
 
     window.__SPEC_MUSIC_INIT__ = true;
     const STORE_KEY = 'sv13_spectator_bgm.muted';
@@ -94,7 +56,7 @@
     }
     updateBtn();
 
-    audio.play().catch(() => { /* will unlock on gesture */ });
+    audio.play().catch(() => {});
 
     const unlock = () => {
       audio.play().catch(() => {});
@@ -143,6 +105,11 @@
   }
 
   // ---- Rendering ----
+  function makeCardImgSrc(idStr) {
+    // Primary expectation: numeric filenames like 001.png on Card-Collection-UI
+    return `${IMG_BASE}/${idStr}.png`;
+  }
+
   function renderCard(cardId, isFaceDown) {
     const cardDiv = document.createElement('div');
     cardDiv.classList.add('card');
@@ -152,11 +119,15 @@
     name.classList.add('card-name');
 
     if (isFaceDown) {
-      setBackImage(img);
+      img.src = BACK_IMG_PRIMARY;
+      img.onerror = () => { img.src = BACK_IMG_FALLBACK; };
       name.textContent = '';
     } else {
       const idStr = String(cardId).padStart(3, '0');
-      setCardImage(img, idStr);
+      img.src = makeCardImgSrc(idStr);
+      // If this 404s, we don’t have a second pattern to try without filenames;
+      // you can add a second convention here if you ever host non-numeric images.
+      img.onerror = () => { /* leave as-is; back image would be misleading for face-up */ };
       name.textContent = idStr;
     }
 
@@ -197,32 +168,49 @@
 
     renderPlayer('player1', state?.players?.player1 || { hp: 200, field: [], hand: [] });
     renderPlayer('player2', state?.players?.player2 || { hp: 200, field: [], hand: [] });
-
-    setText('#spectator-status', 'Live match');
   }
 
   // ---- Polling ----
-  async function fetchDuelState() {
-    try {
-      // Prefer token in query string AND header; backend can pick either.
-      const url = new URL(apiUrl('/duel/current'), location.origin);
+  async function fetchDuelStateOnce() {
+    // Prefer token both in query string AND header; backend can pick either.
+    const buildUrl = (path) => {
+      const url = new URL(apiUrl(path), location.origin);
       if (mode !== 'practice' && sessionId) url.searchParams.set('session', sessionId);
       url.searchParams.set('safeView', 'true'); // keep hands redacted for spectators
       if (TOKEN) url.searchParams.set('token', TOKEN);
+      return url;
+    };
 
-      const res = await fetch(url.toString(), {
-        method: 'GET',
-        headers: {
-          'Accept': 'application/json',
-          ...(TOKEN ? { 'X-Player-Token': TOKEN } : {}),
-        },
-        credentials: 'same-origin',
-      });
+    // Try canonical path first, then the legacy one
+    const candidates = ['/duel/live/current', '/duel/current'];
 
-      if (!res.ok) throw new Error(`Failed to fetch duel state (${res.status})`);
+    let lastErr = null;
+    for (const path of candidates) {
+      try {
+        const url = buildUrl(path);
+        const res = await fetch(url.toString(), {
+          method: 'GET',
+          headers: {
+            'Accept': 'application/json',
+            ...(TOKEN ? { 'X-Player-Token': TOKEN } : {}),
+          },
+          credentials: 'same-origin',
+        });
+        if (!res.ok) throw new Error(`Failed (${res.status}) on ${path}`);
+        const duelState = await res.json();
+        return duelState;
+      } catch (err) {
+        lastErr = err;
+      }
+    }
+    throw lastErr || new Error('Unable to fetch duel state');
+  }
 
-      const duelState = await res.json();
-      renderSpectatorView(duelState);
+  async function fetchDuelState() {
+    try {
+      const state = await fetchDuelStateOnce();
+      renderSpectatorView(state);
+      setText('#spectator-status', 'Live match —');
     } catch (err) {
       console.error('[Spectator] fetch error:', err);
       setText('#spectator-status', 'Failed to load duel.');
