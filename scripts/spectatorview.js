@@ -9,37 +9,11 @@
   const userName = qs.get('user') || '';
 
   // Token & API base: prefer globals the HTML boot script sets, then URL, then default
-  const TOKEN = (window.PLAYER_TOKEN || qs.get('token') || '').trim();
-  let API_BASE = ((window.API_BASE || qs.get('api') || '/api') + '').replace(/\/+$/, '');
-
-  // ✅ Normalize API_BASE so it always points at the server's /api root.
-  //    This prevents 404s like /duel/current (missing /api).
-  try {
-    // Build against current origin to parse safely even if API_BASE is relative
-    const u = new URL(API_BASE, location.origin);
-    const path = u.pathname.replace(/\/+$/, '');
-
-    // If it's just the origin ("/" or ""), force "/api"
-    if (path === '' || path === '/') {
-      u.pathname = '/api';
-      API_BASE = u.href.replace(/\/+$/, '');
-    }
-    // If it isn't already ending with "/api" and doesn't already include "/duel"
-    // (defensive against someone passing a full path like "/api/duel"),
-    // then append "/api".
-    else if (!/\/api$/.test(path) && !/\/duel(\/|$)/.test(path)) {
-      u.pathname = path + '/api';
-      API_BASE = u.href.replace(/\/+$/, '');
-    }
-  } catch {
-    // if URL parsing fails, keep whatever we had (most likely "/api")
-  }
+  const TOKEN    = (window.PLAYER_TOKEN || qs.get('token') || '').trim();
+  const API_BASE = ((window.API_BASE || qs.get('api') || '/api') + '').replace(/\/+$/, '');
 
   // Optional image base for card art
   const IMG_BASE = ((qs.get('imgbase') || 'images/cards') + '').replace(/\/+$/, '');
-
-  // Back-of-card image
-  const BACK_IMG = `${IMG_BASE}/000_WinterlandDeathDeck_Back.png`;
 
   // ---- small helpers ----
   const $ = (sel) => document.querySelector(sel);
@@ -50,9 +24,53 @@
     return `${API_BASE}${p}`;
   }
 
-  // Optional: visually accent practice mode (matches CSS .practice-mode)
-  if (mode === 'practice') {
-    document.body.classList.add('practice-mode');
+  // Optional: visually accent practice mode
+  if (mode === 'practice') document.body.classList.add('practice-mode');
+
+  /* -----------------------------------------------------------
+   * Image helpers with smart fallbacks (.png → .PNG, alt names)
+   * ---------------------------------------------------------*/
+  const EXT_FALLBACKS = ['.png', '.PNG', '.webp', '.jpg', '.jpeg'];
+
+  // back image base names we’ll try (no extension)
+  const BACK_BASES = [
+    `${IMG_BASE}/000_WinterlandDeathDeck_Back`,
+    `${IMG_BASE}/000_WinterlandDeathDeck-Back`,
+    `${IMG_BASE}/000_WinterlandDeathDeck%20Back`,
+  ];
+
+  // tiny 1x1 transparent PNG as a last resort (data URL)
+  const CLEAR_PIXEL =
+    'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAuMB9F2cK2sAAAAASUVORK5CYII=';
+
+  function trySources(img, basesNoExt, exts = EXT_FALLBACKS, finalFallback = CLEAR_PIXEL) {
+    let bi = 0, ei = 0;
+
+    function next() {
+      if (bi >= basesNoExt.length) {
+        img.onerror = null;
+        img.src = finalFallback;
+        return;
+      }
+      const src = `${basesNoExt[bi]}${exts[ei]}`;
+      img.onerror = () => {
+        ei++;
+        if (ei >= exts.length) { ei = 0; bi++; }
+        next();
+      };
+      img.src = src;
+    }
+    next();
+  }
+
+  function setCardImage(img, idStr) {
+    // for numbered cards we only need the base/id (no extension)
+    const bases = [`${IMG_BASE}/${idStr}`];
+    trySources(img, bases);
+  }
+
+  function setBackImage(img) {
+    trySources(img, BACK_BASES);
   }
 
   // ---- Music bootstrap (only if the HTML provides the elements) ----
@@ -134,12 +152,11 @@
     name.classList.add('card-name');
 
     if (isFaceDown) {
-      img.src = BACK_IMG;
+      setBackImage(img);
       name.textContent = '';
     } else {
       const idStr = String(cardId).padStart(3, '0');
-      img.src = `${IMG_BASE}/${idStr}.png`;
-      img.onerror = () => { img.src = BACK_IMG; };
+      setCardImage(img, idStr);
       name.textContent = idStr;
     }
 
@@ -180,6 +197,8 @@
 
     renderPlayer('player1', state?.players?.player1 || { hp: 200, field: [], hand: [] });
     renderPlayer('player2', state?.players?.player2 || { hp: 200, field: [], hand: [] });
+
+    setText('#spectator-status', 'Live match');
   }
 
   // ---- Polling ----
@@ -204,7 +223,6 @@
 
       const duelState = await res.json();
       renderSpectatorView(duelState);
-      setText('#spectator-status', 'Live match');
     } catch (err) {
       console.error('[Spectator] fetch error:', err);
       setText('#spectator-status', 'Failed to load duel.');
