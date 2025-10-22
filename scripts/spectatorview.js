@@ -286,11 +286,7 @@
     for (const path of candidates) {
       try {
         const url = buildUrl(path);
-        const res = await fetch(url.toString(), {
-          method: 'GET',
-          headers: { 'Accept': 'application/json', 'Cache-Control': 'no-cache' },
-          // no custom headers, no credentials -> no preflight, clean CORS ✅
-        });
+        const res = await fetch(url.toString()); // ← no headers, no credentials (no preflight)
         if (!res.ok) {
           if (res.status === 429) {
             // backoff a bit
