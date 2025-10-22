@@ -143,38 +143,25 @@
     return null;
   }
 
-  // Build a small set of **probable** filenames for a face-up card id.
-  // Your repo uses names like "095_Something_Attack.png". We try a few safe suffixes.
   const FACEUP_SUFFIXES = [
-    '',               // 095.png (primary)
-    '_Attack',        // 095_Attack.png
-    '_Utility',
-    '_Support',
-    '_Trap',
-    '_Defense',
-    '_Action',
-    '_Item',
-    '_Weapon',
-    '_Armor',
-    '_Vehicle',
-    '_Supply',
-    '_Unique'
+    '', '_Attack', '_Utility', '_Support', '_Trap', '_Defense',
+    '_Action', '_Item', '_Weapon', '_Armor', '_Vehicle', '_Supply', '_Unique'
   ];
 
-  // If manifest is present and has an entry, we use that exact filename.
   function makeFaceUpSrcCandidates(card) {
     const id3 = extractNumericId(card);
     if (!id3) return [];
-
     if (CARD_MANIFEST && typeof CARD_MANIFEST[id3] === 'string' && CARD_MANIFEST[id3].trim()) {
       return [`${IMG_BASE}/${CARD_MANIFEST[id3].trim()}`];
     }
-
     const list = FACEUP_SUFFIXES.map(s => `${IMG_BASE}/${id3}${s}.png`);
     return list;
   }
 
   // ---- Rendering ----
+  // 🆕 Added local cache of last rendered counts to avoid unnecessary re-renders
+  const lastRenderCounts = { player1: {}, player2: {} };
+
   function renderCard(card, isFaceDown) {
     const cardDiv = document.createElement('div');
     cardDiv.classList.add('card');
@@ -213,6 +200,24 @@
     const deckEl = playerDiv.querySelector('.piles .deck-count');
     const discEl = playerDiv.querySelector('.piles .discard-count');
 
+    // 🆕 Skip re-render if counts unchanged
+    const key = playerKey;
+    const prev = lastRenderCounts[key];
+    const same =
+      prev.hp === playerData?.hp &&
+      prev.field === playerData?.field?.length &&
+      prev.hand === playerData?.handCount &&
+      prev.deck === playerData?.deckCount &&
+      prev.disc === playerData?.discardCount;
+    if (same) return; // nothing changed since last render
+    lastRenderCounts[key] = {
+      hp: playerData?.hp,
+      field: playerData?.field?.length,
+      hand: playerData?.handCount,
+      deck: playerData?.deckCount,
+      disc: playerData?.discardCount
+    };
+
     if (hpEl)   hpEl.textContent = `HP: ${playerData?.hp ?? 0}`;
     if (deckEl) deckEl.textContent = String(playerData?.deckCount ?? 0);
     if (discEl) discEl.textContent = String(playerData?.discardCount ?? 0);
@@ -224,7 +229,6 @@
       field && field.appendChild(renderCard(card, false))
     );
 
-    // Redacted hands: draw facedown count
     const facedown = Number(playerData?.handCount ?? (playerData?.hand?.length ?? 0)) || 0;
     for (let i = 0; i < facedown; i++) {
       hand && hand.appendChild(renderCard({ cardId: 0 }, true));
@@ -249,6 +253,9 @@
     let p1 = raw?.players?.player1 || raw?.players?.p1 || raw?.challenger || null;
     let p2 = raw?.players?.player2 || raw?.players?.p2 || raw?.opponent   || null;
 
+    // ✅ NEW: ensure we pick up bot data for practice duels
+    if (!p2 && raw?.players?.bot) p2 = raw.players.bot;
+
     if (!p1 || !p2) {
       if (Array.isArray(raw?.players)) {
         p1 = raw.players[0] || p1;
@@ -270,12 +277,8 @@
 
       const name = p.discordName || p.name || p.displayName || defaults?.name || 'Player';
       const hp = p.hp ?? p.HP ?? p.health ?? p.life ?? defaults?.hp ?? 200;
-
-      // field may be under: field, board, battlefield, slots, inPlay
       const fieldRaw = p.field || p.board || p.battlefield || p.slots || p.inPlay || [];
       const field = Array.isArray(fieldRaw) ? fieldRaw : [];
-
-      // counts
       const handCount = p.handCount ?? (Array.isArray(p.hand) ? p.hand.length : 0);
       const deckCount = Array.isArray(p.deck) ? p.deck.length : (p.deckCount ?? 0);
       const discardCount = Array.isArray(p.discardPile) ? p.discardPile.length : (p.discardCount ?? 0);
@@ -284,7 +287,7 @@
     }
 
     const P1 = unifyPlayer(p1, { name: 'Challenger', hp: 200 });
-    const P2 = unifyPlayer(p2, { name: 'Opponent',   hp: 200 });
+    const P2 = unifyPlayer(p2, { name: mode === 'practice' ? 'Practice Bot' : 'Opponent', hp: 200 });
 
     const vm = {
       currentPlayer: current,
@@ -325,24 +328,23 @@
     const buildUrl = (path) => {
       const url = new URL(apiUrl(path), location.origin);
       if (mode !== 'practice' && sessionId) url.searchParams.set('session', sessionId);
-      url.searchParams.set('safeView', 'true'); // keep hands redacted
+      url.searchParams.set('safeView', 'true');
       if (TOKEN) url.searchParams.set('token', TOKEN);
       return url;
     };
 
-    // Prefer live route; fall back to /duel/state (backend has no /duel/current)
     const candidates = ['/duel/live/current', '/duel/state'];
 
     let lastErr = null;
     for (const path of candidates) {
       try {
         const url = buildUrl(path);
-        const res = await fetch(url.toString()); // no custom headers/credentials → no preflight
+        const res = await fetch(url.toString());
         if (!res.ok) {
           if (res.status === 429) pollMs = Math.min(pollMs + 1000, 7000);
           throw new Error(`Failed (${res.status}) on ${path}`);
         }
-        pollMs = 3000; // reset on success
+        pollMs = 3000;
         return await res.json();
       } catch (err) {
         lastErr = err;
@@ -383,7 +385,6 @@
     }
   }
 
-  // Kick off: try to load manifest, then start polling (don’t block if it’s slow/missing)
   (async () => {
     await loadManifest().catch(() => {});
     fetchDuelState();
