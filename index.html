@@ -65,13 +65,13 @@
     <p id="watching-count">Spectators Watching: 0</p>
   </div>
 
-  <p id="turn-display" style="text-align:center; color:white; font-size: 18px;"></p>
+  <p id="turn-display" style="text-align:center; color:white; font-size:18px;"></p>
 
   <div class="duel-container">
+    <!-- Opponent / Bot -->
     <div class="player" id="player2">
       <h2 id="player2-name">Opponent</h2>
       <div class="hp">HP: <span id="player2-hp">200</span></div>
-      <!-- 🧮 deck/discard counts (Spectator JS fills .deck-count / .discard-count) -->
       <div class="piles">
         Deck: <strong class="deck-count">0</strong> •
         Discard: <strong class="discard-count">0</strong>
@@ -80,10 +80,10 @@
       <div class="hand" id="player2-hand"></div>
     </div>
 
+    <!-- Challenger / Player1 -->
     <div class="player" id="player1">
       <h2 id="player1-name">Challenger</h2>
       <div class="hp">HP: <span id="player1-hp">200</span></div>
-      <!-- 🧮 deck/discard counts -->
       <div class="piles">
         Deck: <strong class="deck-count">0</strong> •
         Discard: <strong class="discard-count">0</strong>
@@ -161,7 +161,7 @@
     })();
   </script>
 
-  <!-- Load the spectator script (IIFE) -->
+  <!-- Load the spectator script -->
   <script src="scripts/spectatorview.js"></script>
 </body>
 </html>
