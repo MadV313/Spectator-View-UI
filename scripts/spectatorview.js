@@ -133,12 +133,30 @@
     return null;
   }
 
+  // Build a small set of **probable** filenames for a face-up card id.
+  // Your repo uses names like "095_Something_Attack.png". We try a few safe suffixes.
+  const FACEUP_SUFFIXES = [
+    '',               // 095.png (primary)
+    '_Attack',        // 095_Attack.png
+    '_Utility',
+    '_Support',
+    '_Trap',
+    '_Defense',
+    '_Action',
+    '_Item',
+    '_Weapon',
+    '_Armor',
+    '_Vehicle',
+    '_Supply',
+    '_Unique'
+  ];
+
   function makeFaceUpSrcCandidates(card) {
     const id3 = extractNumericId(card);
     if (!id3) return [];
-    // Primary expectation (your decks use plain numeric ids)
-    return [`${IMG_BASE}/${id3}.png`];
-    // If later you want to support repo names like 095_*Attack.png, we can add patterns here.
+    const list = FACEUP_SUFFIXES.map(s => `${IMG_BASE}/${id3}${s}.png`);
+    // Put the plain numeric first; the rest are fallbacks
+    return list;
   }
 
   // ---- Rendering ----
@@ -194,7 +212,7 @@
     }
   }
 
-  // ---- Normalizer: accept your live payload shape exactly
+  // ---- Normalizer: matches your live payload
   function normalizeState(raw) {
     const current =
       raw?.currentPlayer ||
@@ -204,13 +222,11 @@
       raw?.whoseTurn ||
       'player1';
 
-    // server gives spectatorCount (number). fall back to an array if present
     const watcherCount = Number(
       raw?.spectatorCount ??
       (Array.isArray(raw?.spectators) ? raw.spectators.length : 0)
     ) || 0;
 
-    // locate players in your shape
     let p1 = raw?.players?.player1 || raw?.players?.p1 || raw?.challenger || null;
     let p2 = raw?.players?.player2 || raw?.players?.p2 || raw?.opponent   || null;
 
