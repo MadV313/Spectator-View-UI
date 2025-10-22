@@ -27,6 +27,11 @@
     return `${API_BASE}${p}`;
   }
 
+  // Optional: visually accent practice mode (matches CSS .practice-mode)
+  if (mode === 'practice') {
+    document.body.classList.add('practice-mode');
+  }
+
   // ---- Music bootstrap (only if the HTML provides the elements) ----
   (function setupBgMusic() {
     if (window.__SPEC_MUSIC_INIT__) return;
