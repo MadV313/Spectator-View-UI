@@ -15,12 +15,16 @@
   const rawApi = (window.API_BASE || qs.get('api') || '/api').replace(/\/+$/, '');
   const API_BASE = rawApi.endsWith('/api') ? rawApi : `${rawApi}/api`;
 
-  // Optional image base for card art (we’ll log what we resolved to)
-  const IMG_BASE = ((qs.get('imgbase') || 'images/cards') + '').replace(/\/+$/, '');
+  // ✅ Image base: default to Card-Collection-UI numeric sprites (URL param still wins)
+  const IMG_BASE = (
+    qs.get('imgbase') ||
+    'https://madv313.github.io/Card-Collection-UI/images/cards'
+  ).replace(/\/+$/, '');
+
   try { console.log('[Spectator] API_BASE =', API_BASE, 'IMG_BASE =', IMG_BASE); } catch {}
 
-  // Back-of-card image (try numeric first, then named fallback)
-  const BACK_IMG_PRIMARY = `${IMG_BASE}/000.png`;
+  // Back-of-card image (correct filename + fallback)
+  const BACK_IMG_PRIMARY = `${IMG_BASE}/000_CardBack_Unique.png`;
   const BACK_IMG_FALLBACK = `${IMG_BASE}/000_WinterlandDeathDeck_Back.png`;
 
   // ---- small helpers ----
@@ -125,9 +129,8 @@
     } else {
       const idStr = String(cardId).padStart(3, '0');
       img.src = makeCardImgSrc(idStr);
-      // If this 404s, we don’t have a second pattern to try without filenames;
-      // you can add a second convention here if you ever host non-numeric images.
-      img.onerror = () => { /* leave as-is; back image would be misleading for face-up */ };
+      // If missing, don't swap to back for face-up cards; leave as broken to surface issues.
+      img.onerror = () => {};
       name.textContent = idStr;
     }
 
@@ -161,8 +164,16 @@
     setText('#watching-count', `Spectators Watching: ${Array.isArray(state.spectators) ? state.spectators.length : 0}`);
 
     // Optional names
-    const p1Name = state?.players?.player1?.discordName || state?.players?.player1?.name || 'Challenger';
-    const p2Name = state?.players?.player2?.discordName || state?.players?.player2?.name || 'Opponent';
+    const p1Name =
+      state?.players?.player1?.discordName ||
+      state?.players?.player1?.name ||
+      (mode === 'practice' ? (userName || 'Challenger') : 'Challenger');
+
+    const p2Name =
+      state?.players?.player2?.discordName ||
+      state?.players?.player2?.name ||
+      (mode === 'practice' ? 'Practice Bot' : 'Opponent');
+
     setText('#player1-name', p1Name);
     setText('#player2-name', p2Name);
 
@@ -172,7 +183,6 @@
 
   // ---- Polling ----
   async function fetchDuelStateOnce() {
-    // Prefer token both in query string AND header; backend can pick either.
     const buildUrl = (path) => {
       const url = new URL(apiUrl(path), location.origin);
       if (mode !== 'practice' && sessionId) url.searchParams.set('session', sessionId);
@@ -217,7 +227,7 @@
     }
   }
 
-  // Kick off & poll
+  // Kick off & poll (slower polling to avoid 429s)
   fetchDuelState();
-  setInterval(fetchDuelState, 2000);
+  setInterval(fetchDuelState, 5000);
 })();
