@@ -288,12 +288,8 @@
         const url = buildUrl(path);
         const res = await fetch(url.toString(), {
           method: 'GET',
-          headers: {
-            'Accept': 'application/json',
-            ...(TOKEN ? { 'X-Player-Token': TOKEN } : {}),
-            'Cache-Control': 'no-cache'
-          },
-          credentials: 'same-origin',
+          headers: { 'Accept': 'application/json', 'Cache-Control': 'no-cache' },
+          // no custom headers, no credentials -> no preflight, clean CORS ✅
         });
         if (!res.ok) {
           if (res.status === 429) {
