@@ -14,12 +14,22 @@
 
   // Card images
   const IMG_BASE = ((qs.get('imgbase') || 'images/cards') + '').replace(/\/+$/, '');
-  // Fallback chain for card backs (prevents 404 spam)
-  const BACK_CHAIN = [
+  // Manifest (loaded on boot if present)
+  let CARD_MANIFEST = null;      // object map { "095": "095_Name_Attack.png", back?: "..." }
+  let MANIFEST_READY = false;
+  let BACK_OVERRIDE = null;      // string filename from manifest.back when present
+
+  // Fallback chain for card backs (prevents 404 spam). We’ll prepend manifest.back if available.
+  const STATIC_BACK_CHAIN = [
     `${IMG_BASE}/000.png`,
     `${IMG_BASE}/000_CardBack_Unique.png`,
     `${IMG_BASE}/000_WinterlandDeathDeck_Back.png`
   ];
+  function getBackChain() {
+    return BACK_OVERRIDE
+      ? [`${IMG_BASE}/${BACK_OVERRIDE}`, ...STATIC_BACK_CHAIN]
+      : STATIC_BACK_CHAIN.slice();
+  }
 
   try { console.log('[Spectator] API_BASE =', API_BASE, 'IMG_BASE =', IMG_BASE, 'mode =', mode); } catch {}
 
@@ -151,9 +161,15 @@
     '_Unique'
   ];
 
+  // If manifest is present and has an entry, we use that exact filename.
   function makeFaceUpSrcCandidates(card) {
     const id3 = extractNumericId(card);
     if (!id3) return [];
+
+    if (CARD_MANIFEST && typeof CARD_MANIFEST[id3] === 'string' && CARD_MANIFEST[id3].trim()) {
+      return [`${IMG_BASE}/${CARD_MANIFEST[id3].trim()}`];
+    }
+
     const list = FACEUP_SUFFIXES.map(s => `${IMG_BASE}/${id3}${s}.png`);
     // Put the plain numeric first; the rest are fallbacks
     return list;
@@ -169,7 +185,7 @@
     name.classList.add('card-name');
 
     if (isFaceDown) {
-      setImgWithFallbacks(img, BACK_CHAIN);
+      setImgWithFallbacks(img, getBackChain());
       name.textContent = '';
     } else {
       const candidates = makeFaceUpSrcCandidates(card);
@@ -179,7 +195,7 @@
         name.textContent = id3 || '';
       } else {
         // No numeric art found; show back so layout doesn’t collapse
-        setImgWithFallbacks(img, BACK_CHAIN);
+        setImgWithFallbacks(img, getBackChain());
         name.textContent = '';
       }
     }
@@ -332,6 +348,28 @@
     }
   }
 
-  // Kick off
-  fetchDuelState();
+  // ---- Manifest loader (non-blocking; best-effort) ----
+  async function loadManifest() {
+    try {
+      const url = `${IMG_BASE}/manifest.json`;
+      const res = await fetch(url, { cache: 'no-store' });
+      if (!res.ok) return;
+      const json = await res.json().catch(() => null);
+      if (!json || typeof json !== 'object') return;
+      CARD_MANIFEST = json;
+      if (typeof CARD_MANIFEST.back === 'string' && CARD_MANIFEST.back.trim()) {
+        BACK_OVERRIDE = CARD_MANIFEST.back.trim();
+      }
+      MANIFEST_READY = true;
+      try { console.log('[Spectator] card manifest loaded:', Object.keys(CARD_MANIFEST).length, 'entries'); } catch {}
+    } catch {
+      // ignore — manifest is optional
+    }
+  }
+
+  // Kick off: try to load manifest, then start polling (don’t block if it’s slow/missing)
+  (async () => {
+    await loadManifest().catch(() => {});
+    fetchDuelState();
+  })();
 })();
