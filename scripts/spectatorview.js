@@ -6,11 +6,34 @@
   // ---- IDs / params ----
   const mode = (qs.get('mode') || 'duel').toLowerCase();
   const sessionId = qs.get('session') || qs.get('duelId') || '';
-  const userName = qs.get('user')   || '';
+  const userName = qs.get('user') || '';
 
   // Token & API base: prefer globals the HTML boot script sets, then URL, then default
-  const TOKEN    = (window.PLAYER_TOKEN || qs.get('token') || '').trim();
-  const API_BASE = ((window.API_BASE || qs.get('api') || '/api') + '').replace(/\/+$/, '');
+  const TOKEN = (window.PLAYER_TOKEN || qs.get('token') || '').trim();
+  let API_BASE = ((window.API_BASE || qs.get('api') || '/api') + '').replace(/\/+$/, '');
+
+  // ✅ Normalize API_BASE so it always points at the server's /api root.
+  //    This prevents 404s like /duel/current (missing /api).
+  try {
+    // Build against current origin to parse safely even if API_BASE is relative
+    const u = new URL(API_BASE, location.origin);
+    const path = u.pathname.replace(/\/+$/, '');
+
+    // If it's just the origin ("/" or ""), force "/api"
+    if (path === '' || path === '/') {
+      u.pathname = '/api';
+      API_BASE = u.href.replace(/\/+$/, '');
+    }
+    // If it isn't already ending with "/api" and doesn't already include "/duel"
+    // (defensive against someone passing a full path like "/api/duel"),
+    // then append "/api".
+    else if (!/\/api$/.test(path) && !/\/duel(\/|$)/.test(path)) {
+      u.pathname = path + '/api';
+      API_BASE = u.href.replace(/\/+$/, '');
+    }
+  } catch {
+    // if URL parsing fails, keep whatever we had (most likely "/api")
+  }
 
   // Optional image base for card art
   const IMG_BASE = ((qs.get('imgbase') || 'images/cards') + '').replace(/\/+$/, '');
