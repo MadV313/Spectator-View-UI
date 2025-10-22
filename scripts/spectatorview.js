@@ -171,7 +171,6 @@
     }
 
     const list = FACEUP_SUFFIXES.map(s => `${IMG_BASE}/${id3}${s}.png`);
-    // Put the plain numeric first; the rest are fallbacks
     return list;
   }
 
@@ -194,7 +193,6 @@
         const id3 = extractNumericId(card);
         name.textContent = id3 || '';
       } else {
-        // No numeric art found; show back so layout doesn’t collapse
         setImgWithFallbacks(img, getBackChain());
         name.textContent = '';
       }
@@ -212,8 +210,13 @@
     const hpEl   = playerDiv.querySelector('.hp');
     const field  = playerDiv.querySelector('.field');
     const hand   = playerDiv.querySelector('.hand');
+    const deckEl = playerDiv.querySelector('.piles .deck-count');
+    const discEl = playerDiv.querySelector('.piles .discard-count');
 
     if (hpEl)   hpEl.textContent = `HP: ${playerData?.hp ?? 0}`;
+    if (deckEl) deckEl.textContent = String(playerData?.deckCount ?? 0);
+    if (discEl) discEl.textContent = String(playerData?.discardCount ?? 0);
+
     if (field)  field.innerHTML = '';
     if (hand)   hand.innerHTML  = '';
 
@@ -256,15 +259,28 @@
     }
 
     function unifyPlayer(p, defaults) {
-      if (!p) return { name: defaults?.name || 'Player', hp: 200, field: [], handCount: 0 };
+      if (!p) return {
+        name: defaults?.name || 'Player',
+        hp: 200,
+        field: [],
+        handCount: 0,
+        deckCount: 0,
+        discardCount: 0
+      };
 
       const name = p.discordName || p.name || p.displayName || defaults?.name || 'Player';
       const hp = p.hp ?? p.HP ?? p.health ?? p.life ?? defaults?.hp ?? 200;
+
+      // field may be under: field, board, battlefield, slots, inPlay
       const fieldRaw = p.field || p.board || p.battlefield || p.slots || p.inPlay || [];
       const field = Array.isArray(fieldRaw) ? fieldRaw : [];
-      const handCount = p.handCount ?? (Array.isArray(p.hand) ? p.hand.length : 0);
 
-      return { name, hp: Number(hp) || 0, field, handCount };
+      // counts
+      const handCount = p.handCount ?? (Array.isArray(p.hand) ? p.hand.length : 0);
+      const deckCount = Array.isArray(p.deck) ? p.deck.length : (p.deckCount ?? 0);
+      const discardCount = Array.isArray(p.discardPile) ? p.discardPile.length : (p.discardCount ?? 0);
+
+      return { name, hp: Number(hp) || 0, field, handCount, deckCount, discardCount };
     }
 
     const P1 = unifyPlayer(p1, { name: 'Challenger', hp: 200 });
@@ -280,8 +296,8 @@
       console.log('[Spectator] normalized:', {
         turn: vm.currentPlayer,
         spectators: vm.spectatorCount,
-        p1: { name: P1.name, hp: P1.hp, field: P1.field.length, handCount: P1.handCount },
-        p2: { name: P2.name, hp: P2.hp, field: P2.field.length, handCount: P2.handCount }
+        p1: { name: P1.name, hp: P1.hp, field: P1.field.length, hand: P1.handCount, deck: P1.deckCount, discard: P1.discardCount },
+        p2: { name: P2.name, hp: P2.hp, field: P2.field.length, hand: P2.handCount, deck: P2.deckCount, discard: P2.discardCount }
       });
     } catch {}
     return vm;
@@ -363,7 +379,7 @@
       MANIFEST_READY = true;
       try { console.log('[Spectator] card manifest loaded:', Object.keys(CARD_MANIFEST).length, 'entries'); } catch {}
     } catch {
-      // ignore — manifest is optional
+      // optional; ignore errors
     }
   }
 
