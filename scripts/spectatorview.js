@@ -14,8 +14,12 @@
 
   // Card images
   const IMG_BASE = ((qs.get('imgbase') || 'images/cards') + '').replace(/\/+$/, '');
-  const BACK_IMG_PRIMARY  = `${IMG_BASE}/000.png`;
-  const BACK_IMG_FALLBACK = `${IMG_BASE}/000_WinterlandDeathDeck_Back.png`;
+  // Fallback chain for card backs (prevents 404 spam)
+  const BACK_CHAIN = [
+    `${IMG_BASE}/000.png`,
+    `${IMG_BASE}/000_CardBack_Unique.png`,
+    `${IMG_BASE}/000_WinterlandDeathDeck_Back.png`
+  ];
 
   try { console.log('[Spectator] API_BASE =', API_BASE, 'IMG_BASE =', IMG_BASE, 'mode =', mode); } catch {}
 
@@ -26,6 +30,17 @@
   function apiUrl(path) {
     const p = path.startsWith('/') ? path : `/${path}`;
     return `${API_BASE}${p}`;
+  }
+
+  // simple onerror fallback chain for <img>
+  function setImgWithFallbacks(img, urls) {
+    let i = 0;
+    const tryNext = () => {
+      if (i >= urls.length) return;
+      img.onerror = () => { i++; tryNext(); };
+      img.src = urls[i];
+    };
+    tryNext();
   }
 
   if (mode === 'practice') document.body.classList.add('practice-mode');
@@ -109,20 +124,21 @@
     if (typeof direct === 'number') return to3(direct);
 
     const s = String(direct);
-    // Prefer a leading 1–3 digit number
-    const mLead = s.match(/^\D?(\d{1,3})\D/); // e.g., "095_Flashlight", "x095y"
+    const mLead = s.match(/^\D?(\d{1,3})\D/);
     if (mLead) return to3(mLead[1]);
 
-    // Look for any 1–3 digit token in the string
     const mAny = s.match(/(\d{1,3})/);
     if (mAny) return to3(mAny[1]);
 
     return null;
   }
 
-  function makeFaceUpSrc(card) {
+  function makeFaceUpSrcCandidates(card) {
     const id3 = extractNumericId(card);
-    return id3 ? `${IMG_BASE}/${id3}.png` : null;
+    if (!id3) return [];
+    // Primary expectation (your decks use plain numeric ids)
+    return [`${IMG_BASE}/${id3}.png`];
+    // If later you want to support repo names like 095_*Attack.png, we can add patterns here.
   }
 
   // ---- Rendering ----
@@ -135,20 +151,17 @@
     name.classList.add('card-name');
 
     if (isFaceDown) {
-      img.src = BACK_IMG_PRIMARY;
-      img.onerror = () => { img.src = BACK_IMG_FALLBACK; };
+      setImgWithFallbacks(img, BACK_CHAIN);
       name.textContent = '';
     } else {
-      const src = makeFaceUpSrc(card);
-      if (src) {
-        img.src = src;
-        img.onerror = () => { /* keep broken to signal mismatch, don’t fake back for face-up */ };
+      const candidates = makeFaceUpSrcCandidates(card);
+      if (candidates.length) {
+        setImgWithFallbacks(img, candidates);
         const id3 = extractNumericId(card);
         name.textContent = id3 || '';
       } else {
         // No numeric art found; show back so layout doesn’t collapse
-        img.src = BACK_IMG_PRIMARY;
-        img.onerror = () => { img.src = BACK_IMG_FALLBACK; };
+        setImgWithFallbacks(img, BACK_CHAIN);
         name.textContent = '';
       }
     }
@@ -181,9 +194,8 @@
     }
   }
 
-  // ---- Normalizer: accepts many backend shapes and returns a single view model
+  // ---- Normalizer: accept your live payload shape exactly
   function normalizeState(raw) {
-    // figure current turn
     const current =
       raw?.currentPlayer ||
       raw?.turn?.current ||
@@ -192,41 +204,33 @@
       raw?.whoseTurn ||
       'player1';
 
-    // pull spectators if present
-    const spectators = Array.isArray(raw?.spectators) ? raw.spectators : [];
+    // server gives spectatorCount (number). fall back to an array if present
+    const watcherCount = Number(
+      raw?.spectatorCount ??
+      (Array.isArray(raw?.spectators) ? raw.spectators.length : 0)
+    ) || 0;
 
-    // locate players in various formats
+    // locate players in your shape
     let p1 = raw?.players?.player1 || raw?.players?.p1 || raw?.challenger || null;
     let p2 = raw?.players?.player2 || raw?.players?.p2 || raw?.opponent   || null;
 
     if (!p1 || !p2) {
-      // players as array
       if (Array.isArray(raw?.players)) {
         p1 = raw.players[0] || p1;
         p2 = raw.players[1] || p2;
       }
-      // fallback by roles
       p1 = p1 || raw?.player1 || raw?.playerA || raw?.a || null;
       p2 = p2 || raw?.player2 || raw?.playerB || raw?.b || null;
     }
 
-    // unify hp/field/handCount/name for each
     function unifyPlayer(p, defaults) {
       if (!p) return { name: defaults?.name || 'Player', hp: 200, field: [], handCount: 0 };
 
       const name = p.discordName || p.name || p.displayName || defaults?.name || 'Player';
-
-      const hp =
-        p.hp ?? p.HP ?? p.health ?? p.life ?? defaults?.hp ?? 200;
-
-      // field may be under: field, board, battlefield, slots, inPlay
+      const hp = p.hp ?? p.HP ?? p.health ?? p.life ?? defaults?.hp ?? 200;
       const fieldRaw = p.field || p.board || p.battlefield || p.slots || p.inPlay || [];
       const field = Array.isArray(fieldRaw) ? fieldRaw : [];
-
-      // hand length may be given directly or as array
-      const handCount =
-        p.handCount ??
-        (Array.isArray(p.hand) ? p.hand.length : 0);
+      const handCount = p.handCount ?? (Array.isArray(p.hand) ? p.hand.length : 0);
 
       return { name, hp: Number(hp) || 0, field, handCount };
     }
@@ -236,16 +240,14 @@
 
     const vm = {
       currentPlayer: current,
-      spectators,
-      players: {
-        player1: P1,
-        player2: P2
-      }
+      spectatorCount: watcherCount,
+      players: { player1: P1, player2: P2 }
     };
 
     try {
       console.log('[Spectator] normalized:', {
         turn: vm.currentPlayer,
+        spectators: vm.spectatorCount,
         p1: { name: P1.name, hp: P1.hp, field: P1.field.length, handCount: P1.handCount },
         p2: { name: P2.name, hp: P2.hp, field: P2.field.length, handCount: P2.handCount }
       });
@@ -257,7 +259,7 @@
     const state = normalizeState(rawState);
 
     setText('#turn-display', `Current Turn: ${state.currentPlayer || 'player1'}`);
-    setText('#watching-count', `Spectators Watching: ${Array.isArray(state.spectators) ? state.spectators.length : 0}`);
+    setText('#watching-count', `Spectators Watching: ${state.spectatorCount}`);
 
     const p1Name = state.players.player1.name || 'Challenger';
     const p2Name = state.players.player2.name || 'Opponent';
@@ -280,18 +282,16 @@
       return url;
     };
 
-    const candidates = ['/duel/live/current', '/duel/current'];
+    // Prefer live route; fall back to /duel/state (backend has no /duel/current)
+    const candidates = ['/duel/live/current', '/duel/state'];
 
     let lastErr = null;
     for (const path of candidates) {
       try {
         const url = buildUrl(path);
-        const res = await fetch(url.toString()); // ← no headers, no credentials (no preflight)
+        const res = await fetch(url.toString()); // no custom headers/credentials → no preflight
         if (!res.ok) {
-          if (res.status === 429) {
-            // backoff a bit
-            pollMs = Math.min(pollMs + 1000, 7000);
-          }
+          if (res.status === 429) pollMs = Math.min(pollMs + 1000, 7000);
           throw new Error(`Failed (${res.status}) on ${path}`);
         }
         pollMs = 3000; // reset on success
@@ -312,7 +312,6 @@
       console.error('[Spectator] fetch error:', err);
       setText('#spectator-status', 'Failed to load duel.');
     } finally {
-      // schedule next tick with current backoff value
       setTimeout(fetchDuelState, pollMs);
     }
   }
