@@ -4,6 +4,8 @@
   <meta charset="UTF-8">
   <title>DayZ CCG - Spectator View</title>
   <link rel="stylesheet" href="styles/spectator.css">
+  <!-- 🧩 quiet the 404 for /favicon.ico -->
+  <link rel="icon" href="images/cards/000.png">
   <style>
     /* 🔊 Tiny audio toggle */
     .audio-toggle {
@@ -22,6 +24,15 @@
       backdrop-filter: blur(2px);
     }
     .audio-toggle:hover { box-shadow: 0 0 10px #00ffff; }
+
+    /* simple inline styles for the piles row (uses classes, not IDs) */
+    .piles {
+      margin: 6px 0 10px;
+      color: #cfe9ff;
+      font-size: 13px;
+      opacity: 0.9;
+    }
+    .piles strong { font-weight: 700; }
   </style>
 
   <!-- 🌐 Token/API boot; expose to scripts and persist token -->
@@ -60,6 +71,11 @@
     <div class="player" id="player2">
       <h2 id="player2-name">Opponent</h2>
       <div class="hp">HP: <span id="player2-hp">200</span></div>
+      <!-- 🧮 deck/discard counts (Spectator JS fills .deck-count / .discard-count) -->
+      <div class="piles">
+        Deck: <strong class="deck-count">0</strong> •
+        Discard: <strong class="discard-count">0</strong>
+      </div>
       <div class="field" id="player2-field"></div>
       <div class="hand" id="player2-hand"></div>
     </div>
@@ -67,6 +83,11 @@
     <div class="player" id="player1">
       <h2 id="player1-name">Challenger</h2>
       <div class="hp">HP: <span id="player1-hp">200</span></div>
+      <!-- 🧮 deck/discard counts -->
+      <div class="piles">
+        Deck: <strong class="deck-count">0</strong> •
+        Discard: <strong class="discard-count">0</strong>
+      </div>
       <div class="field" id="player1-field"></div>
       <div class="hand" id="player1-hand"></div>
     </div>
