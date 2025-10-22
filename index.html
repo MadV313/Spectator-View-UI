@@ -38,7 +38,7 @@
         if (tokenFromUrl) localStorage.setItem('sv13.token', tokenFromUrl);
       } catch {}
 
-      // Globals for any scripts (e.g., spectator.js)
+      // Globals for any scripts (e.g., spectatorview.js)
       window.PLAYER_TOKEN = token;
       window.API_BASE = apiFromUrl || '/api';
       try { console.log('[Spectator] API_BASE =', window.API_BASE); } catch {}
@@ -140,6 +140,7 @@
     })();
   </script>
 
-  <script type="module" src="scripts/spectator.js"></script>
+  <!-- Load the spectator script (IIFE) -->
+  <script src="scripts/spectatorview.js"></script>
 </body>
 </html>
