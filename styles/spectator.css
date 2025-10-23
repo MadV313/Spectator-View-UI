@@ -121,6 +121,13 @@ body {
   width: 100%;
 }
 
+/* Face-down backs (used for traps/unrevealed cards) */
+.card.face-down {
+  filter: grayscale(100%);
+  opacity: 0.85;
+  border: 2px dashed #555;
+}
+
 /* Hover effect for cards */
 .card:hover {
   transform: scale(1.05);
