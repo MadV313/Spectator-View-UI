@@ -143,6 +143,12 @@
     return null;
   }
 
+  // --- Trap detection (range-only; no manifest needed)
+  function isTrapIdByRange(id3) {
+    const n = Number(String(id3).replace(/\D/g, ''));
+    return Number.isFinite(n) && n >= 106 && n <= 120;
+  }
+
   const FACEUP_SUFFIXES = [
     '', '_Attack', '_Utility', '_Support', '_Trap', '_Defense',
     '_Action', '_Item', '_Weapon', '_Armor', '_Vehicle', '_Supply', '_Unique'
@@ -159,10 +165,10 @@
   }
 
   // ---- Rendering ----
-  // 🆕 Added local cache of last rendered counts to avoid unnecessary re-renders
+  // cache of last rendered counts to avoid unnecessary re-renders
   const lastRenderCounts = { player1: {}, player2: {} };
 
-  function renderCard(card, isFaceDown) {
+  function renderCard(card, forceFaceDown) {
     const cardDiv = document.createElement('div');
     cardDiv.classList.add('card');
 
@@ -170,20 +176,31 @@
     const name = document.createElement('div');
     name.classList.add('card-name');
 
+    // If server sent explicit states, respect them; then enforce trap facedown unless _fired.
+    const id3    = extractNumericId(card);
+    const fired  = Boolean(card && card._fired);
+    const statedFaceDown = Boolean(card && card.isFaceDown);
+    const isTrap = isTrapIdByRange(id3);
+    const isFaceDown = Boolean(forceFaceDown || statedFaceDown || (isTrap && !fired));
+
     if (isFaceDown) {
       setImgWithFallbacks(img, getBackChain());
-      name.textContent = '';
+      name.textContent = ''; // hide card id/name when facedown
     } else {
       const candidates = makeFaceUpSrcCandidates(card);
       if (candidates.length) {
         setImgWithFallbacks(img, candidates);
-        const id3 = extractNumericId(card);
         name.textContent = id3 || '';
       } else {
         setImgWithFallbacks(img, getBackChain());
         name.textContent = '';
       }
     }
+
+    // helpful flags for debugging
+    cardDiv.dataset.cardId = id3 || '';
+    cardDiv.dataset.isTrap = String(!!isTrap);
+    cardDiv.dataset.fired  = String(!!fired);
 
     cardDiv.appendChild(img);
     cardDiv.appendChild(name);
@@ -200,7 +217,7 @@
     const deckEl = playerDiv.querySelector('.piles .deck-count');
     const discEl = playerDiv.querySelector('.piles .discard-count');
 
-    // 🆕 Skip re-render if counts unchanged
+    // skip re-render if counts unchanged
     const key = playerKey;
     const prev = lastRenderCounts[key];
     const same =
@@ -209,7 +226,7 @@
       prev.hand === playerData?.handCount &&
       prev.deck === playerData?.deckCount &&
       prev.disc === playerData?.discardCount;
-    if (same) return; // nothing changed since last render
+    if (same) return;
     lastRenderCounts[key] = {
       hp: playerData?.hp,
       field: playerData?.field?.length,
@@ -225,10 +242,16 @@
     if (field)  field.innerHTML = '';
     if (hand)   hand.innerHTML  = '';
 
-    (playerData?.field || []).forEach(card =>
-      field && field.appendChild(renderCard(card, false))
-    );
+    // FIELD: enforce facedown for traps that haven't fired
+    (playerData?.field || []).forEach(card => {
+      const id3 = extractNumericId(card);
+      const fired = Boolean(card && card._fired);
+      const isTrap = isTrapIdByRange(id3);
+      const facedown = Boolean(card && card.isFaceDown) || (isTrap && !fired);
+      field && field.appendChild(renderCard(card, facedown));
+    });
 
+    // HAND: always facedown in spectator view, just render counts
     const facedown = Number(playerData?.handCount ?? (playerData?.hand?.length ?? 0)) || 0;
     for (let i = 0; i < facedown; i++) {
       hand && hand.appendChild(renderCard({ cardId: 0 }, true));
@@ -253,7 +276,7 @@
     let p1 = raw?.players?.player1 || raw?.players?.p1 || raw?.challenger || null;
     let p2 = raw?.players?.player2 || raw?.players?.p2 || raw?.opponent   || null;
 
-    // ✅ NEW: ensure we pick up bot data for practice duels
+    // pick up bot data for practice duels
     if (!p2 && raw?.players?.bot) p2 = raw.players.bot;
 
     if (!p1 || !p2) {
@@ -321,8 +344,16 @@
     renderPlayer('player2', state.players.player2);
   }
 
-  // ---- Polling with mild backoff on 429 ----
+  // ---- Polling with robust backoff on 429 (and temporary errors) ----
   let pollMs = 3000;
+  const BASE_POLL_MS = 3000;
+  const MAX_POLL_MS = 15000;
+
+  function bumpBackoff(prev) {
+    // exponential-ish + small jitter
+    const next = Math.min(Math.ceil(prev * 1.6) + Math.floor(Math.random() * 400), MAX_POLL_MS);
+    return next;
+  }
 
   async function fetchDuelStateOnce() {
     const buildUrl = (path) => {
@@ -339,12 +370,14 @@
     for (const path of candidates) {
       try {
         const url = buildUrl(path);
-        const res = await fetch(url.toString());
+        const res = await fetch(url.toString(), { cache: 'no-store' });
         if (!res.ok) {
-          if (res.status === 429) pollMs = Math.min(pollMs + 1000, 7000);
+          if (res.status === 429) pollMs = bumpBackoff(pollMs);
+          else if (res.status >= 500) pollMs = bumpBackoff(pollMs);
           throw new Error(`Failed (${res.status}) on ${path}`);
         }
-        pollMs = 3000;
+        // success → reset backoff
+        pollMs = BASE_POLL_MS;
         return await res.json();
       } catch (err) {
         lastErr = err;
