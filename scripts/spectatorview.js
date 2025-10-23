@@ -333,7 +333,7 @@
       return url;
     };
 
-    const candidates = ['/duel/live/current', '/duel/state'];
+    const candidates = ['/duel/state'];
 
     let lastErr = null;
     for (const path of candidates) {
