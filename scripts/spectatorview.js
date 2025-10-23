@@ -186,14 +186,17 @@
     if (isFaceDown) {
       setImgWithFallbacks(img, getBackChain());
       name.textContent = ''; // hide card id/name when facedown
+      cardDiv.classList.add('face-down'); // ⬅ match spectator CSS styling for backs
     } else {
       const candidates = makeFaceUpSrcCandidates(card);
       if (candidates.length) {
         setImgWithFallbacks(img, candidates);
         name.textContent = id3 || '';
       } else {
+        // No face-up art found → show back image and mark as facedown visually
         setImgWithFallbacks(img, getBackChain());
         name.textContent = '';
+        cardDiv.classList.add('face-down');
       }
     }
 
