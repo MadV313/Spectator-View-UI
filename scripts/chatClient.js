@@ -150,6 +150,9 @@ async function getIo() {
 
       socket.on('presence', ({ count }) => {
         presEl.textContent = `${count} online`;
+        // 🔥 mirror presence into the main header counter
+        const wc = document.getElementById('watching-count');
+        if (wc) wc.textContent = `Spectators Watching: ${count}`;
       });
 
       inputEl?.addEventListener('input', () => {
