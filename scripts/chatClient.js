@@ -1,114 +1,198 @@
-// scripts/chatClient.js
-// Browser-side Socket.IO client for Spectator Chat
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>DayZ CCG - Spectator View</title>
+  <link rel="stylesheet" href="styles/spectator.css">
 
-import { io } from 'https://cdn.socket.io/4.7.5/socket.io.esm.min.js';
+  <!-- ✅ Silence icon-related 404s by using local assets that exist -->
+  <link rel="icon" href="images/cards/000_CardBack_Unique.png">
+  <link rel="icon" type="image/png" sizes="32x32" href="images/cards/000_CardBack_Unique.png">
+  <link rel="icon" type="image/png" sizes="192x192" href="images/cards/000_CardBack_Unique.png">
+  <link rel="apple-touch-icon" href="images/cards/000_CardBack_Unique.png">
 
-// Pull API info from the globals your index.html sets
-const qs = new URLSearchParams(location.search);
+  <style>
+    /* 🔊 Tiny audio toggle */
+    .audio-toggle {
+      position: fixed;
+      right: 16px;
+      bottom: 16px;
+      z-index: 9999;
+      background: rgba(0,0,0,0.65);
+      color: #fff;
+      border: 1px solid #00ffff;
+      border-radius: 999px;
+      padding: 8px 12px;
+      font-size: 12px;
+      cursor: pointer;
+      user-select: none;
+      backdrop-filter: blur(2px);
+    }
+    .audio-toggle:hover { box-shadow: 0 0 10px #00ffff; }
 
-// window.API_BASE looks like: "https://duel-bot-production.up.railway.app/api"
-// Chat websocket is at the backend ORIGIN, not /api
-const API_BASE = (window.API_BASE || '').trim();
-const backendOrigin = API_BASE
-  ? new URL(API_BASE, location.href).origin
-  : location.origin;
+    /* simple inline styles for the piles row (uses classes, not IDs) */
+    .piles {
+      margin: 6px 0 10px;
+      color: #cfe9ff;
+      font-size: 13px;
+      opacity: 0.9;
+    }
+    .piles strong { font-weight: 700; }
+  </style>
 
-const name   = qs.get('user') || 'Spectator';
-const mode   = (qs.get('mode') || '').toLowerCase();
-const duelId = qs.get('session') || qs.get('duel') || '';
-const roomId = duelId || (mode === 'practice'
-  ? `practice:${name}`
-  : `spectate:${name}`);
+  <!-- 🌐 Token/API boot; expose to scripts and persist token -->
+  <script>
+    (function () {
+      const qs = new URLSearchParams(location.search);
+      const tokenFromUrl = qs.get('token') || '';
+      const apiFromUrl = (qs.get('api') || '').replace(/\/+$/, '');
 
-const logEl    = document.getElementById('chat-log');
-const formEl   = document.getElementById('chat-form');
-const inputEl  = document.getElementById('chat-input');
-const typingEl = document.getElementById('chat-typing');
-const presEl   = document.getElementById('chat-presence');
+      // Persist/reuse token across UIs
+      let token = tokenFromUrl;
+      try {
+        if (!token) token = localStorage.getItem('sv13.token') || '';
+        if (tokenFromUrl) localStorage.setItem('sv13.token', tokenFromUrl);
+      } catch {}
 
-// Persist a stable userId for nicer "You" tagging
-const LS_KEY = 'sv13.chat.uid';
-const userId = (() => {
-  try {
-    const v = localStorage.getItem(LS_KEY);
-    if (v) return v;
-    const n = (crypto?.randomUUID?.() || ('u-' + Math.random().toString(36).slice(2, 10)));
-    localStorage.setItem(LS_KEY, n);
-    return n;
-  } catch { return 'u-' + Math.random().toString(36).slice(2,10); }
-})();
+      // Globals for any scripts (e.g., spectatorview.js)
+      window.PLAYER_TOKEN = token;
+      window.API_BASE = apiFromUrl || '/api';
+      try { console.log('[Spectator] API_BASE =', window.API_BASE); } catch {}
+    })();
+  </script>
+</head>
+<body>
+  <div id="background"></div>
 
-function escapeHtml(s){return String(s).replace(/[&<>"']/g,c=>({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[c]));}
-function atBottom() { return (logEl.scrollTop + logEl.clientHeight) >= (logEl.scrollHeight - 60); }
-function scrollToBottom() { logEl.scrollTop = logEl.scrollHeight; }
-function renderMsg({ userId: uid, name: uname, text, ts }) {
-  const wrap = document.createElement('div');
-  wrap.className = 'chat-row' + (uid === userId ? ' me' : '');
-  const when = new Date(ts || Date.now()).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-  wrap.innerHTML = `
-    <div class="chat-bubble">
-      <div class="chat-meta">
-        <span class="chat-name">${escapeHtml(uname || 'Spectator')}${uid === userId ? ' (You)' : ''}</span>
-        <span class="chat-time">${when}</span>
+  <!-- 🧱 Two-column layout: main content + right chat panel -->
+  <div class="page">
+    <!-- Main spectator column (all your existing content) -->
+    <main id="spectator-main">
+      <div class="spectator-header">
+        <h1>Spectator View</h1>
+        <p id="spectator-status">Waiting for match...</p>
+        <p id="watching-count">Spectators Watching: 0</p>
       </div>
-      <div class="chat-text">${escapeHtml(text || '')}</div>
-    </div>`;
-  logEl.appendChild(wrap);
-}
 
-// --- Socket.IO connection ---
-const socket = io(backendOrigin, {
-  path: '/socket.io',
-  transports: ['websocket'],
-  withCredentials: false,
-  reconnection: true,
-  reconnectionDelayMax: 5000,
-});
+      <p id="turn-display" style="text-align:center; color:white; font-size:18px;"></p>
 
-socket.on('connect', () => {
-  // join the chat room for this duel/practice session
-  socket.emit('join_room', { roomId, userId, name });
-});
+      <div class="duel-container">
+        <!-- Opponent / Bot -->
+        <div class="player" id="player2">
+          <h2 id="player2-name">Opponent</h2>
+          <div class="hp">HP: <span id="player2-hp">200</span></div>
+          <div class="piles">
+            Deck: <strong class="deck-count">0</strong> •
+            Discard: <strong class="discard-count">0</strong>
+          </div>
+          <div class="field" id="player2-field"></div>
+          <div class="hand" id="player2-hand"></div>
+        </div>
 
-socket.on('history', ({ messages = [] }) => {
-  logEl.innerHTML = '';
-  messages.forEach(renderMsg);
-  scrollToBottom();
-});
+        <!-- Challenger / Player1 -->
+        <div class="player" id="player1">
+          <h2 id="player1-name">Challenger</h2>
+          <div class="hp">HP: <span id="player1-hp">200</span></div>
+          <div class="piles">
+            Deck: <strong class="deck-count">0</strong> •
+            Discard: <strong class="discard-count">0</strong>
+          </div>
+          <div class="field" id="player1-field"></div>
+          <div class="hand" id="player1-hand"></div>
+        </div>
+      </div>
+    </main>
 
-socket.on('message', (msg) => {
-  const shouldStick = atBottom();
-  renderMsg(msg);
-  if (shouldStick) scrollToBottom();
-});
+    <!-- ⭐ New: Spectator Chat right column -->
+    <aside id="chat-panel" aria-label="Spectator chat">
+      <header class="chat-header">
+        <div class="chat-title">Live Chat</div>
+        <div id="chat-presence" class="chat-presence">0 online</div>
+      </header>
 
-socket.on('presence', ({ count }) => {
-  presEl.textContent = `${count} online`;
-});
+      <div id="chat-log" class="chat-log" role="log" aria-live="polite"></div>
+      <div id="chat-typing" class="chat-typing" aria-live="polite"></div>
 
-let typingTimer;
-inputEl?.addEventListener('input', () => {
-  socket.emit('typing', true);
-  clearTimeout(typingTimer);
-  typingTimer = setTimeout(() => socket.emit('typing', false), 1200);
-});
+      <!-- prevent full page reload even if the module fails to attach -->
+      <form id="chat-form" class="chat-form" autocomplete="off" onsubmit="event.preventDefault()">
+        <input id="chat-input" type="text" placeholder="Message the crowd…" maxlength="500" />
+        <button id="chat-send" type="submit" aria-label="Send message">Send</button>
+      </form>
+    </aside>
+  </div>
 
-socket.on('typing', ({ users = [] }) => {
-  typingEl.textContent = users.length ? `${users.length} typing…` : '';
-});
+  <!-- 🔊 Background music -->
+  <audio
+    id="spec-bgm"
+    src="audio/bg/Follow the Trail.mp3"
+    autoplay
+    muted
+    playsinline
+    loop
+    preload="auto"></audio>
+  <button id="specAudioToggle" class="audio-toggle" aria-label="Mute background music">🔇</button>
 
-// Form submit → send message (defensive: also prevents default)
-formEl?.addEventListener('submit', (e) => {
-  e.preventDefault(); e.stopPropagation();
-  const text = (inputEl.value || '').trim();
-  if (!text) return;
-  if (text.length > 500) return;
-  socket.emit('chat_message', text);
-  inputEl.value = '';
-  socket.emit('typing', false);
-});
+  <script>
+    // Autoplay-safe music control (unmutes on first tap/keypress)
+    (function setupSpectatorMusic() {
+      const audio = document.getElementById('spec-bgm');
+      const btn   = document.getElementById('specAudioToggle');
+      if (!audio || !btn) return;
 
-// Helpful console breadcrumb
-try {
-  console.log('[ChatClient] origin:', backendOrigin, 'roomId:', roomId, 'user:', name);
-} catch {}
+      const STORE_KEY = 'sv13_spectator_bgm.muted';
+
+      // Restore saved preference
+      try {
+        const stored = localStorage.getItem(STORE_KEY);
+        if (stored !== null) audio.muted = (stored === 'true');
+      } catch {}
+
+      updateBtn();
+      audio.play().catch(() => { /* will unlock on first gesture */ });
+
+      // First user gesture: ensure playback; unmute unless user previously chose mute
+      const unlock = () => {
+        audio.play().catch(() => {});
+        try {
+          if (localStorage.getItem(STORE_KEY) !== 'true') {
+            audio.muted = false;
+            updateBtn();
+          }
+        } catch {}
+        cleanupUnlock();
+      };
+      function cleanupUnlock() {
+        window.removeEventListener('pointerdown', unlock, opt);
+        window.removeEventListener('keydown', unlock);
+        document.removeEventListener('visibilitychange', vis);
+      }
+      const opt = { passive: true };
+      window.addEventListener('pointerdown', unlock, opt);
+      window.addEventListener('keydown', unlock);
+
+      // Safari quirk: retry when tab becomes visible
+      const vis = () => { if (!document.hidden) audio.play().catch(() => {}); };
+      document.addEventListener('visibilitychange', vis);
+
+      // Manual toggle
+      btn.addEventListener('click', () => {
+        audio.muted = !audio.muted;
+        try { localStorage.setItem(STORE_KEY, String(audio.muted)); } catch {}
+        updateBtn();
+        audio.play().catch(() => {});
+      });
+
+      function updateBtn() {
+        btn.textContent = audio.muted ? '🔇' : '🔊';
+        btn.setAttribute('aria-label', audio.muted ? 'Play background music' : 'Mute background music');
+      }
+    })();
+  </script>
+
+  <!-- Existing spectator logic -->
+  <script src="scripts/spectatorview.js"></script>
+
+  <!-- ⭐ New: realtime chat client (ESM). Must be after the chat DOM exists. -->
+  <script type="module" src="scripts/chatClient.js"></script>
+</body>
+</html>
