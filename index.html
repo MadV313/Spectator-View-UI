@@ -64,38 +64,60 @@
 <body>
   <div id="background"></div>
 
-  <div class="spectator-header">
-    <h1>Spectator View</h1>
-    <p id="spectator-status">Waiting for match...</p>
-    <p id="watching-count">Spectators Watching: 0</p>
-  </div>
-
-  <p id="turn-display" style="text-align:center; color:white; font-size:18px;"></p>
-
-  <div class="duel-container">
-    <!-- Opponent / Bot -->
-    <div class="player" id="player2">
-      <h2 id="player2-name">Opponent</h2>
-      <div class="hp">HP: <span id="player2-hp">200</span></div>
-      <div class="piles">
-        Deck: <strong class="deck-count">0</strong> •
-        Discard: <strong class="discard-count">0</strong>
+  <!-- 🧱 Two-column layout: main content + right chat panel -->
+  <div class="page">
+    <!-- Main spectator column (all your existing content) -->
+    <main id="spectator-main">
+      <div class="spectator-header">
+        <h1>Spectator View</h1>
+        <p id="spectator-status">Waiting for match...</p>
+        <p id="watching-count">Spectators Watching: 0</p>
       </div>
-      <div class="field" id="player2-field"></div>
-      <div class="hand" id="player2-hand"></div>
-    </div>
 
-    <!-- Challenger / Player1 -->
-    <div class="player" id="player1">
-      <h2 id="player1-name">Challenger</h2>
-      <div class="hp">HP: <span id="player1-hp">200</span></div>
-      <div class="piles">
-        Deck: <strong class="deck-count">0</strong> •
-        Discard: <strong class="discard-count">0</strong>
+      <p id="turn-display" style="text-align:center; color:white; font-size:18px;"></p>
+
+      <div class="duel-container">
+        <!-- Opponent / Bot -->
+        <div class="player" id="player2">
+          <h2 id="player2-name">Opponent</h2>
+          <div class="hp">HP: <span id="player2-hp">200</span></div>
+          <div class="piles">
+            Deck: <strong class="deck-count">0</strong> •
+            Discard: <strong class="discard-count">0</strong>
+          </div>
+          <div class="field" id="player2-field"></div>
+          <div class="hand" id="player2-hand"></div>
+        </div>
+
+        <!-- Challenger / Player1 -->
+        <div class="player" id="player1">
+          <h2 id="player1-name">Challenger</h2>
+          <div class="hp">HP: <span id="player1-hp">200</span></div>
+          <div class="piles">
+            Deck: <strong class="deck-count">0</strong> •
+            Discard: <strong class="discard-count">0</strong>
+          </div>
+          <div class="field" id="player1-field"></div>
+          <div class="hand" id="player1-hand"></div>
+        </div>
       </div>
-      <div class="field" id="player1-field"></div>
-      <div class="hand" id="player1-hand"></div>
-    </div>
+    </main>
+
+    <!-- ⭐ New: Spectator Chat right column -->
+    <aside id="chat-panel" aria-label="Spectator chat">
+      <header class="chat-header">
+        <div class="chat-title">Live Chat</div>
+        <div id="chat-presence" class="chat-presence">0 online</div>
+      </header>
+
+      <div id="chat-log" class="chat-log" role="log" aria-live="polite"></div>
+      <div id="chat-typing" class="chat-typing" aria-live="polite"></div>
+
+      <form id="chat-form" class="chat-form" autocomplete="off">
+        <input id="chat-input" type="text" placeholder="Message the crowd…" maxlength="500" />
+        <button id="chat-send" type="submit" aria-label="Send message">Send</button>
+      </form>
+    </aside>
   </div>
 
   <!-- 🔊 Background music -->
@@ -166,7 +188,10 @@
     })();
   </script>
 
-  <!-- Load the spectator script -->
+  <!-- Existing spectator logic -->
   <script src="scripts/spectatorview.js"></script>
+
+  <!-- ⭐ New: realtime chat client (ESM). Must be after the chat DOM exists. -->
+  <script type="module" src="scripts/chatClient.js"></script>
 </body>
 </html>
