@@ -317,6 +317,46 @@ body {
   50%     { text-shadow: 0 0 16px #00ffff; }
 }
 
+/* ──────────────────────────────────────────────────────────
+   NEW: Duel result modal
+   ────────────────────────────────────────────────────────── */
+.duel-result {
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.55);
+  backdrop-filter: blur(3px);
+  z-index: 10010;
+  display: grid;
+  place-items: center;
+  opacity: 0;
+  transition: opacity .2s ease;
+}
+.duel-result.show { opacity: 1; }
+
+.duel-result__card {
+  width: min(92vw, 520px);
+  background: rgba(0,30,40,0.95);
+  border: 1px solid #00ffff66;
+  border-radius: 14px;
+  padding: 18px 20px;
+  box-shadow: 0 0 18px rgba(0,255,255,0.25);
+  color: #e8fafe;
+  text-align: center;
+}
+.duel-result__title  { font-size: 20px; font-weight: 800; color: #8ff; margin-bottom: 8px; }
+.duel-result__winner { font-size: 18px; margin: 6px 0; text-shadow: 0 0 10px #00ffff; }
+.duel-result__reason { font-size: 14px; opacity: .9; color: #cfe9ff; }
+.duel-result__close  {
+  margin-top: 14px;
+  padding: 8px 12px;
+  border-radius: 10px;
+  border: 1px solid #00ffff55;
+  background: rgba(0,50,60,0.7);
+  color: #bff;
+  cursor: pointer;
+}
+.duel-result__close:hover { box-shadow: 0 0 10px #00ffff44; }
+
 /* Responsive tweaks */
 @media (max-width: 768px) {
   .player {
