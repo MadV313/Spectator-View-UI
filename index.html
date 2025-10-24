@@ -239,7 +239,7 @@
       const token = window.PLAYER_TOKEN || qs.get('token') || '';
       const api   = (window.API_BASE || qs.get('api') || '').replace(/\/+$/, '');
       // allow override via ?hub=<url>
-      const hub = qs.get('hub') || 'https://duel-ui-production.up.railway.app/';
+      const hub = qs.get('hub') || 'https://madv313.github.io/HUB-UI//';
       const url = new URL(hub);
       if (token) url.searchParams.set('token', token);
       if (api)   url.searchParams.set('api', api);
