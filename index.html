@@ -121,6 +121,9 @@
     </aside>
   </div>
 
+  <!-- 🔔 Join toast mount (content injected via JS) -->
+  <div id="joinToast" class="join-toast" role="status" aria-live="polite"></div>
+
   <!-- 🔊 Background music -->
   <audio
     id="spec-bgm"
@@ -174,20 +177,57 @@
       const vis = () => { if (!document.hidden) audio.play().catch(() => {}); };
       document.addEventListener('visibilitychange', vis);
 
-      // Manual toggle — now also flips volume to be extra-safe
-      btn.addEventListener('click', () => {
+      // Manual toggle — now also flips volume to be extra-safe (+ touch handler for mobile)
+      const toggle = () => {
         const willMute = !audio.muted;
         audio.muted = willMute;
         audio.volume = willMute ? 0 : 1;
         try { localStorage.setItem(STORE_KEY, String(audio.muted)); } catch {}
         updateBtn();
         audio.play().catch(() => {}); // keep playback active on unmute
-      });
+      };
+      btn.addEventListener('click', toggle);
+      btn.addEventListener('touchend', (e) => { e.preventDefault(); toggle(); }, { passive: false });
 
       function updateBtn() {
         btn.textContent = audio.muted ? '🔇' : '🔊';
         btn.setAttribute('aria-label', audio.muted ? 'Play background music' : 'Mute background music');
       }
+    })();
+
+    // 🔵 Flash turn display blue whenever its text changes
+    (function flashTurnOnUpdate() {
+      const el = document.getElementById('turn-display');
+      if (!el) return;
+      const applyFlash = () => {
+        el.classList.add('highlight-blue','flash-blue');
+        setTimeout(() => el.classList.remove('flash-blue'), 1600);
+      };
+      // initial nudge in case first write happens immediately
+      setTimeout(applyFlash, 200);
+      const mo = new MutationObserver(applyFlash);
+      mo.observe(el, { childList: true, characterData: true, subtree: true });
+    })();
+
+    // 🔔 Join toast: show "@name has joined the madness" for 10s (triggered by chatClient.js dispatch)
+    (function joinToastListener() {
+      const mount = document.getElementById('joinToast');
+      if (!mount) return;
+
+      let hideTimer = null;
+      const show = (name) => {
+        const safe = String(name || 'A player');
+        mount.textContent = `@${safe} has joined the madness`;
+        mount.classList.add('show','highlight-blue');
+        clearTimeout(hideTimer);
+        hideTimer = setTimeout(() => {
+          mount.classList.remove('show','highlight-blue');
+        }, 10000);
+      };
+
+      // Listen for a custom event dispatched by chatClient.js:
+      // window.dispatchEvent(new CustomEvent('spectator:user_joined', { detail: { name } }))
+      window.addEventListener('spectator:user_joined', (e) => show(e.detail?.name));
     })();
   </script>
 
