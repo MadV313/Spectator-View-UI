@@ -155,6 +155,13 @@ async function getIo() {
         if (wc) wc.textContent = `Spectators Watching: ${count}`;
       });
 
+      // 🔔 optional: server can emit when a user joins -> show toast in UI
+      socket.on('user_joined', ({ name: joinedName }) => {
+        try {
+          window.dispatchEvent(new CustomEvent('spectator:user_joined', { detail: { name: joinedName } }));
+        } catch {}
+      });
+
       inputEl?.addEventListener('input', () => {
         if (!socket || !socket.connected) return;
         socket.emit('typing', true);
