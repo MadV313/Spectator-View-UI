@@ -19,6 +19,12 @@
   let MANIFEST_READY = false;
   let BACK_OVERRIDE = null;      // string filename from manifest.back when present
 
+  // 🔒 Sticky names cache so later sparse payloads can’t revert to generic labels
+  const STICKY_NAMES = {
+    player1: null,
+    player2: null,
+  };
+
   // Fallback chain for card backs (prevents 404 spam). We’ll prepend manifest.back if available.
   const STATIC_BACK_CHAIN = [
     `${IMG_BASE}/000.png`,
@@ -186,17 +192,14 @@
     if (isFaceDown) {
       setImgWithFallbacks(img, getBackChain());
       name.textContent = ''; // hide card id/name when facedown
-      cardDiv.classList.add('face-down'); // ⬅ match spectator CSS styling for backs
     } else {
       const candidates = makeFaceUpSrcCandidates(card);
       if (candidates.length) {
         setImgWithFallbacks(img, candidates);
         name.textContent = id3 || '';
       } else {
-        // No face-up art found → show back image and mark as facedown visually
         setImgWithFallbacks(img, getBackChain());
         name.textContent = '';
-        cardDiv.classList.add('face-down');
       }
     }
 
@@ -291,17 +294,25 @@
       p2 = p2 || raw?.player2 || raw?.playerB || raw?.b || null;
     }
 
-    function unifyPlayer(p, defaults) {
-      if (!p) return {
-        name: defaults?.name || 'Player',
-        hp: 200,
-        field: [],
-        handCount: 0,
-        deckCount: 0,
-        discardCount: 0
-      };
+    function unifyPlayer(p, defaults, key) {
+      const fallbackName = STICKY_NAMES[key] || defaults?.name || 'Player';
+      if (!p) {
+        return {
+          name: fallbackName,
+          hp: 200,
+          field: [],
+          handCount: 0,
+          deckCount: 0,
+          discardCount: 0
+        };
+      }
 
-      const name = p.discordName || p.name || p.displayName || defaults?.name || 'Player';
+      const computedName =
+        p.discordName || p.name || p.displayName || fallbackName;
+
+      // stick the first non-empty name we see
+      if (computedName && !STICKY_NAMES[key]) STICKY_NAMES[key] = computedName;
+
       const hp = p.hp ?? p.HP ?? p.health ?? p.life ?? defaults?.hp ?? 200;
       const fieldRaw = p.field || p.board || p.battlefield || p.slots || p.inPlay || [];
       const field = Array.isArray(fieldRaw) ? fieldRaw : [];
@@ -309,11 +320,11 @@
       const deckCount = Array.isArray(p.deck) ? p.deck.length : (p.deckCount ?? 0);
       const discardCount = Array.isArray(p.discardPile) ? p.discardPile.length : (p.discardCount ?? 0);
 
-      return { name, hp: Number(hp) || 0, field, handCount, deckCount, discardCount };
+      return { name: computedName, hp: Number(hp) || 0, field, handCount, deckCount, discardCount };
     }
 
-    const P1 = unifyPlayer(p1, { name: 'Challenger', hp: 200 });
-    const P2 = unifyPlayer(p2, { name: mode === 'practice' ? 'Practice Bot' : 'Opponent', hp: 200 });
+    const P1 = unifyPlayer(p1, { name: 'Challenger', hp: 200 }, 'player1');
+    const P2 = unifyPlayer(p2, { name: mode === 'practice' ? 'Practice Bot' : 'Opponent', hp: 200 }, 'player2');
 
     const vm = {
       currentPlayer: current,
@@ -332,14 +343,22 @@
     return vm;
   }
 
+  function resolveTurnLabel(current, players) {
+    const key = String(current || '').toLowerCase();
+    if (key === 'player1' || key === 'player2') {
+      return players?.[key]?.name || STICKY_NAMES[key] || key;
+    }
+    return current || 'player1';
+  }
+
   function renderSpectatorView(rawState) {
     const state = normalizeState(rawState);
 
-    setText('#turn-display', `Current Turn: ${state.currentPlayer || 'player1'}`);
-    setText('#watching-count', `Spectators Watching: ${state.spectatorCount}`);
+    const turnName = resolveTurnLabel(state.currentPlayer, state.players);
+    setText('#turn-display', `Current Turn: ${turnName}`);
 
-    const p1Name = state.players.player1.name || 'Challenger';
-    const p2Name = state.players.player2.name || 'Opponent';
+    const p1Name = state.players.player1.name || STICKY_NAMES.player1 || 'Challenger';
+    const p2Name = state.players.player2.name || STICKY_NAMES.player2 || 'Opponent';
     setText('#player1-name', p1Name);
     setText('#player2-name', p2Name);
 
