@@ -173,6 +173,14 @@ async function getIo() {
         typingEl.textContent = users.length ? `${users.length} typing…` : '';
       });
 
+      // 🏁 Forward duel end events to the page (spectator-only UI)
+      socket.on('duel_result', (payload = {}) => {
+        try { window.dispatchEvent(new CustomEvent('spectator:duel_result', { detail: payload })); } catch {}
+      });
+      socket.on('match_end', (payload = {}) => {
+        try { window.dispatchEvent(new CustomEvent('spectator:duel_result', { detail: payload })); } catch {}
+      });
+
       console.log('[ChatClient] origin:', backendOrigin, 'namespace: /spectator-chat', 'roomId:', roomId, 'user:', name);
     } catch (e) {
       console.error('[ChatClient] init failed:', e);
