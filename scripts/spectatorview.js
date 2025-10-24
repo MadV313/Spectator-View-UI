@@ -25,6 +25,10 @@
     player2: null,
   };
 
+  // URL name hints (optional)
+  const P1_HINT = qs.get('p1') || qs.get('player1') || qs.get('p1name') || userName || null;
+  const P2_HINT = qs.get('p2') || qs.get('player2') || qs.get('p2name') || null;
+
   // Fallback chain for card backs (prevents 404 spam). We’ll prepend manifest.back if available.
   const STATIC_BACK_CHAIN = [
     `${IMG_BASE}/000.png`,
@@ -264,6 +268,24 @@
     }
   }
 
+  // ---- Name fetch helper (optional, once) ----
+  let _nameFetched = false;
+  async function fetchNameFromTokenOnce() {
+    if (_nameFetched || !TOKEN) return;
+    _nameFetched = true;
+    try {
+      const url = apiUrl(`/me/${encodeURIComponent(TOKEN)}/stats`);
+      const res = await fetch(url, { cache: 'no-store' });
+      if (!res.ok) return;
+      const data = await res.json().catch(() => null);
+      const nick = (data?.discordName || data?.name || '').trim();
+      if (nick) {
+        STICKY_NAMES.player1 = STICKY_NAMES.player1 || nick;
+        console.log('[Spectator] resolved player1 from token:', nick);
+      }
+    } catch {}
+  }
+
   // ---- Normalizer: matches your live payload
   function normalizeState(raw) {
     const current =
@@ -294,8 +316,19 @@
       p2 = p2 || raw?.player2 || raw?.playerB || raw?.b || null;
     }
 
+    function isGeneric(n) {
+      const s = String(n || '').toLowerCase();
+      return !s || s === 'player' || s === 'player 1' || s === 'player1' || s === 'challenger';
+    }
+
     function unifyPlayer(p, defaults, key) {
-      const fallbackName = STICKY_NAMES[key] || defaults?.name || 'Player';
+      // compose fallback → sticky → url hint → defaults
+      const urlHint =
+        (key === 'player1' ? P1_HINT : P2_HINT) ||
+        (key === 'player2' && mode === 'practice' ? 'Practice Bot' : null);
+
+      const fallbackName = STICKY_NAMES[key] || urlHint || defaults?.name || 'Player';
+
       if (!p) {
         return {
           name: fallbackName,
@@ -307,11 +340,18 @@
         };
       }
 
-      const computedName =
+      let computedName =
         p.discordName || p.name || p.displayName || fallbackName;
 
-      // stick the first non-empty name we see
-      if (computedName && !STICKY_NAMES[key]) STICKY_NAMES[key] = computedName;
+      // If the server gave us a generic label, prefer URL hint / sticky
+      if (isGeneric(computedName)) {
+        computedName = fallbackName;
+      }
+
+      // stick the first non-empty non-generic name we see
+      if (computedName && !isGeneric(computedName) && !STICKY_NAMES[key]) {
+        STICKY_NAMES[key] = computedName;
+      }
 
       const hp = p.hp ?? p.HP ?? p.health ?? p.life ?? defaults?.hp ?? 200;
       const fieldRaw = p.field || p.board || p.battlefield || p.slots || p.inPlay || [];
@@ -441,6 +481,13 @@
   }
 
   (async () => {
+    // Prime stickies from URL hints immediately (no flicker)
+    if (P1_HINT && !STICKY_NAMES.player1) STICKY_NAMES.player1 = P1_HINT;
+    if (P2_HINT && !STICKY_NAMES.player2) STICKY_NAMES.player2 = P2_HINT || (mode === 'practice' ? 'Practice Bot' : null);
+
+    // Optionally resolve player1 from token once
+    await fetchNameFromTokenOnce().catch(()=>{});
+
     await loadManifest().catch(() => {});
     fetchDuelState();
   })();
