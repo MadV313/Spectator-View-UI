@@ -174,18 +174,37 @@
       const vis = () => { if (!document.hidden) audio.play().catch(() => {}); };
       document.addEventListener('visibilitychange', vis);
 
-      // Manual toggle
+      // Manual toggle — now also flips volume to be extra-safe
       btn.addEventListener('click', () => {
-        audio.muted = !audio.muted;
+        const willMute = !audio.muted;
+        audio.muted = willMute;
+        audio.volume = willMute ? 0 : 1;
         try { localStorage.setItem(STORE_KEY, String(audio.muted)); } catch {}
         updateBtn();
-        audio.play().catch(() => {});
+        audio.play().catch(() => {}); // keep playback active on unmute
       });
 
       function updateBtn() {
         btn.textContent = audio.muted ? '🔇' : '🔊';
         btn.setAttribute('aria-label', audio.muted ? 'Play background music' : 'Mute background music');
       }
+    })();
+  </script>
+
+  <!-- ↩ Return to Hub button (preserves token + api, override with ?hub=) -->
+  <a id="hubBtn" class="hub-btn" href="#" role="button">↩ Return to Hub</a>
+  <script>
+    (function setHubLink(){
+      const qs = new URLSearchParams(location.search);
+      const token = window.PLAYER_TOKEN || qs.get('token') || '';
+      const api   = (window.API_BASE || qs.get('api') || '').replace(/\/+$/, '');
+      // allow override via ?hub=<url>
+      const hub = qs.get('hub') || 'https://duel-ui-production.up.railway.app/';
+      const url = new URL(hub);
+      if (token) url.searchParams.set('token', token);
+      if (api)   url.searchParams.set('api', api);
+      const el = document.getElementById('hubBtn');
+      if (el) el.href = url.toString();
     })();
   </script>
 
