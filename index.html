@@ -124,6 +124,16 @@
   <!-- 🔔 Join toast mount (content injected via JS) -->
   <div id="joinToast" class="join-toast" role="status" aria-live="polite"></div>
 
+  <!-- 🏁 Duel result panel (shown when duel ends) -->
+  <div id="duelResult" class="duel-result" hidden>
+    <div class="duel-result__card">
+      <div class="duel-result__title">Duel Finished</div>
+      <div class="duel-result__winner" id="duelResultWinner"></div>
+      <div class="duel-result__reason" id="duelResultReason"></div>
+      <button id="duelResultClose" class="duel-result__close" type="button">Close</button>
+    </div>
+  </div>
+
   <!-- 🔊 Background music -->
   <audio
     id="spec-bgm"
@@ -229,6 +239,32 @@
       // window.dispatchEvent(new CustomEvent('spectator:user_joined', { detail: { name } }))
       window.addEventListener('spectator:user_joined', (e) => show(e.detail?.name));
     })();
+
+    // 🏁 Duel result panel listener — reacts to custom event from chatClient.js
+    (function duelResultListener(){
+      const wrap   = document.getElementById('duelResult');
+      const winner = document.getElementById('duelResultWinner');
+      const reason = document.getElementById('duelResultReason');
+      const close  = document.getElementById('duelResultClose');
+      if (!wrap || !winner || !reason || !close) return;
+
+      function show(payload){
+        const w = payload?.winner || payload?.winnerName || 'Unknown';
+        const r = payload?.reason || payload?.summary || '';
+        winner.textContent = `Winner: ${w}`;
+        reason.textContent = r ? String(r) : '';
+        wrap.hidden = false;
+        wrap.classList.add('show');
+      }
+      function hide(){
+        wrap.classList.remove('show');
+        wrap.hidden = true;
+      }
+      close.addEventListener('click', hide);
+      wrap.addEventListener('click', (e) => { if (e.target === wrap) hide(); });
+
+      window.addEventListener('spectator:duel_result', (e) => show(e.detail || {}));
+    })();
   </script>
 
   <!-- ↩ Return to Hub button (preserves token + api, override with ?hub=) -->
@@ -236,13 +272,33 @@
   <script>
     (function setHubLink(){
       const qs = new URLSearchParams(location.search);
-      const token = window.PLAYER_TOKEN || qs.get('token') || '';
-      const api   = (window.API_BASE || qs.get('api') || '').replace(/\/+$/, '');
-      // allow override via ?hub=<url>
-      const hub = qs.get('hub') || 'https://madv313.github.io/HUB-UI//';
+
+      // Prefer explicit token in window / query / localStorage, then normalize
+      let token = (window.PLAYER_TOKEN || qs.get('token') || '');
+      if (!token) {
+        try { token = localStorage.getItem('sv13.token') || ''; } catch {}
+      }
+      // Strip leading "Bearer " if present
+      if (token && /^Bearer\s+/i.test(token)) token = token.replace(/^Bearer\s+/i, '');
+
+      // API base the hub can reuse
+      const api = (window.API_BASE || qs.get('api') || '').replace(/\/+$/, '');
+
+      // allow override via ?hub=<url> — keep your GitHub hub default
+      const rawHub = qs.get('hub') || 'https://madv313.github.io/HUB-UI/';
+      const hub = rawHub.replace(/\/+$/, '/') || '/';
       const url = new URL(hub);
+
+      // Put params the hub will look for
       if (token) url.searchParams.set('token', token);
       if (api)   url.searchParams.set('api', api);
+
+      // Redundant copy in the hash too, for hubs that only read location.hash
+      const hash = new URLSearchParams(url.hash.replace(/^#/, ''));
+      if (token && !hash.get('token')) hash.set('token', token);
+      if (api && !hash.get('api'))     hash.set('api', api);
+      url.hash = hash.toString() ? ('#' + hash.toString()) : '';
+
       const el = document.getElementById('hubBtn');
       if (el) el.href = url.toString();
     })();
