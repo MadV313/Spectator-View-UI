@@ -179,6 +179,8 @@ body {
   user-select: none;
   backdrop-filter: blur(2px);
   transition: box-shadow 0.2s ease;
+  /* ensure nothing blocks clicks */
+  pointer-events: auto;
 }
 
 .audio-toggle:hover {
@@ -253,6 +255,23 @@ body {
   cursor: pointer;
 }
 #chat-send:hover { box-shadow: 0 0 10px #00ffff44; }
+
+/* Return to Hub button */
+.hub-btn{
+  position: fixed;
+  right: 16px;
+  bottom: 70px; /* sits above the audio button */
+  z-index: 9999;
+  background: rgba(0,40,50,0.85);
+  color: #bff;
+  border: 1px solid #00ffff66;
+  border-radius: 10px;
+  padding: 10px 14px;
+  text-decoration: none;
+  font-weight: 600;
+  backdrop-filter: blur(3px);
+}
+.hub-btn:hover{ box-shadow: 0 0 10px #00ffff55; }
 
 /* Responsive tweaks */
 @media (max-width: 768px) {
