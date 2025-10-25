@@ -1,194 +1,195 @@
 // scripts/chatClient.js
-// Spectator Chat client — robust loader + correct namespace (/spectator-chat)
+// Robust spectator chat client with local input guards and gentle rate limiting.
+// Works with Spectator UI and (optionally) Duel UI if you include a chat panel there.
 
-async function getIo() {
-  // Prefer a globally loaded client (from <script src="https://cdn.socket.io/...">)
-  if (window.io) return window.io;
-  // Fallback: ESM import
-  try {
-    const mod = await import('https://cdn.socket.io/4.7.5/socket.io.esm.min.js');
-    return mod.io;
-  } catch (e) {
-    console.error('[ChatClient] Unable to load Socket.IO client:', e);
-    return null;
-  }
-}
+(function initSpectatorChat() {
+  const log   = document.getElementById('chat-log');
+  const form  = document.getElementById('chat-form');
+  const input = document.getElementById('chat-input');
+  const send  = document.getElementById('chat-send');
+  const type  = document.getElementById('chat-typing');
+  const pres  = document.getElementById('chat-presence');
 
-(function initChatClient() {
-  const qs = new URLSearchParams(location.search);
-
-  // Identify the spectator + which room to join
-  const name   = qs.get('user') || 'Spectator';
-  const mode   = (qs.get('mode') || '').toLowerCase();
-  const duelId = qs.get('session') || qs.get('duel') || '';
-  const roomId = duelId || (mode === 'practice' ? `practice:${name}` : `spectate:${name}`);
-
-  // API_BASE is set in index.html; sockets use the ORIGIN (not /api)
-  const API_BASE = (window.API_BASE || '').trim();
-  const backendOrigin = API_BASE ? new URL(API_BASE, location.href).origin : location.origin;
-
-  // DOM hooks
-  const logEl    = document.getElementById('chat-log');
-  const formEl   = document.getElementById('chat-form');
-  const inputEl  = document.getElementById('chat-input');
-  const typingEl = document.getElementById('chat-typing');
-  const presEl   = document.getElementById('chat-presence');
-  const sendBtn  = document.getElementById('chat-send');
-
-  // Stable userId for local viewer
-  const LS_KEY = 'sv13.chat.uid';
-  const userId = (() => {
-    try {
-      const v = localStorage.getItem(LS_KEY);
-      if (v) return v;
-      const n = crypto?.randomUUID?.() || ('u-' + Math.random().toString(36).slice(2, 10));
-      localStorage.setItem(LS_KEY, n);
-      return n;
-    } catch {
-      return 'u-' + Math.random().toString(36).slice(2, 10);
-    }
-  })();
+  // If the page doesn't have chat elements, do nothing.
+  if (!log || !form || !input || !send) return;
 
   // Helpers
-  function escapeHtml(s) {
-    return String(s).replace(/[&<>"']/g, c => ({
-      '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
-    }[c]));
-  }
-  function atBottom() {
-    return (logEl.scrollTop + logEl.clientHeight) >= (logEl.scrollHeight - 60);
-  }
-  function scrollToBottom() {
-    logEl.scrollTop = logEl.scrollHeight;
-  }
-  function renderMsg({ userId: uid, name: uname, text, ts }) {
-    const wrap = document.createElement('div');
-    wrap.className = 'chat-row' + (uid === userId ? ' me' : '');
-    const when = new Date(ts || Date.now()).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-    wrap.innerHTML = `
-      <div class="chat-bubble">
-        <div class="chat-meta">
-          <span class="chat-name">${escapeHtml(uname || 'Spectator')}${uid === userId ? ' (You)' : ''}</span>
-          <span class="chat-time">${when}</span>
-        </div>
-        <div class="chat-text">${escapeHtml(text || '')}</div>
-      </div>`;
-    logEl.appendChild(wrap);
-  }
+  const now = () => Date.now();
+  const fmtTime = (d=new Date()) => d.toLocaleTimeString?.([], {hour:'2-digit', minute:'2-digit'}) || '';
 
-  // Defensive: never submit if not connected
-  function setSendEnabled(ok) {
-    if (!sendBtn) return;
-    sendBtn.disabled = !ok;
-    sendBtn.style.opacity = ok ? '1' : '0.6';
-    sendBtn.style.cursor  = ok ? 'pointer' : 'not-allowed';
-  }
-  setSendEnabled(false);
+  // Identity / routing
+  const qs = new URLSearchParams(location.search);
+  const name = qs.get('user') || localStorage.getItem('DUEL_PLAYER_NAME') || 'Spectator';
+  const api  = (window.API_BASE || qs.get('api') || '/api').replace(/\/+$/,'');
+  // Convert /api base → socket origin
+  let socketOrigin = location.origin;
+  try {
+    const u = new URL(api, location.origin);
+    socketOrigin = u.origin;
+  } catch {}
 
-  // Always prevent default submit
-  formEl?.addEventListener('submit', (e) => {
-    e.preventDefault(); e.stopPropagation();
-    if (!socket || !socket.connected) return;
-    const text = (inputEl.value || '').trim();
-    if (!text || text.length > 500) return;
-    socket.emit('chat_message', text);
-    inputEl.value = '';
-    socket.emit('typing', false);
-  });
-
+  // Socket
   let socket = null;
-  let typingTimer = null;
+  if (window.io && typeof window.io === 'function') {
+    try {
+      socket = window.io(socketOrigin, { path: '/socket.io', transports: ['websocket'] });
+    } catch (e) {
+      console.warn('[chat] socket init failed:', e);
+    }
+  } else {
+    console.warn('[chat] socket.io client not present; chat disabled.');
+  }
 
-  // Load client + connect
-  (async () => {
-    const io = await getIo();
-    if (!io) {
-      console.error('[ChatClient] Socket.IO client unavailable; chat disabled.');
+  // UI helpers
+  function scrollToBottom() {
+    try { log.scrollTop = log.scrollHeight; } catch {}
+  }
+  function setTyping(msg) {
+    if (!type) return;
+    type.textContent = msg || '';
+  }
+  function setPresence(n) {
+    if (!pres) return;
+    const count = Number(n) || 0;
+    pres.textContent = `${count} online`;
+  }
+  function bubble({ who, text, ts, self }) {
+    const row = document.createElement('div');
+    row.className = `chat-row${self ? ' me' : ''}`;
+    const card = document.createElement('div');
+    card.className = 'chat-bubble';
+    card.innerHTML = `
+      <div class="chat-meta">
+        <span class="chat-name">${who || 'User'}</span>
+        <span class="chat-time">${fmtTime(ts ? new Date(ts) : new Date())}</span>
+      </div>
+      <div class="chat-text"></div>
+    `;
+    card.querySelector('.chat-text').textContent = text || '';
+    row.appendChild(card);
+    log.appendChild(row);
+    scrollToBottom();
+  }
+
+  // Local guards
+  let lastSendAt = 0;
+  const MIN_SEND_GAP_MS = 1600;
+
+  function sanitizedText() {
+    const t = (input.value || '').replace(/\s+/g, ' ').trim();
+    return t;
+  }
+
+  function canSend() {
+    const t = sanitizedText();
+    if (!t) {
+      setTyping('Type a message first.');
+      return false;
+    }
+    const dt = now() - lastSendAt;
+    if (dt < MIN_SEND_GAP_MS) {
+      setTyping('You’re sending messages too fast.');
+      return false;
+    }
+    return true;
+  }
+
+  function disableSend(disabled) {
+    try { send.disabled = !!disabled; } catch {}
+  }
+
+  async function handleSubmit(ev) {
+    if (ev) ev.preventDefault();
+
+    if (!canSend()) return;
+    const text = sanitizedText();
+
+    // Local echo (optional). Keep it responsive even if server acks later.
+    bubble({ who: name, text, self: true });
+    input.value = '';
+    setTyping('');
+    disableSend(true);
+    lastSendAt = now();
+
+    if (!socket) {
+      // No socket? Just re-enable and move on (local echo only).
+      disableSend(false);
       return;
     }
 
     try {
-      // IMPORTANT: correct namespace
-      const nsUrl = `${backendOrigin}/spectator-chat`;
-      socket = io(nsUrl, {
-        path: '/socket.io',
-        transports: ['websocket'],
-        withCredentials: false,
-        reconnection: true,
-        reconnectionDelayMax: 5000,
+      // Use ack + timeout so we don't get stuck disabled if server is slow.
+      let acked = false;
+      const timer = setTimeout(() => {
+        if (!acked) {
+          setTyping('Message may be delayed…');
+          disableSend(false);
+        }
+      }, 3500);
+
+      socket.timeout(4000).emit('chat:send', { text, name }, (err, ok) => {
+        acked = true;
+        clearTimeout(timer);
+        // Server-side validation (e.g., empty or rate-limited)
+        if (err || ok === false) {
+          setTyping(err?.message || 'Message not accepted.');
+        } else {
+          setTyping('');
+        }
+        disableSend(false);
       });
-
-      socket.on('connect', () => {
-        console.log('[ChatClient] connected → joining room', { ns: nsUrl, roomId, userId, name });
-        setSendEnabled(true);
-        socket.emit('join_room', { roomId, userId, name });
-      });
-
-      socket.on('connect_error', (err) => {
-        console.error('[ChatClient] connect_error:', err?.message || err);
-        setSendEnabled(false);
-      });
-
-      socket.on('disconnect', (reason) => {
-        console.warn('[ChatClient] disconnected:', reason);
-        setSendEnabled(false);
-      });
-
-      socket.on('error', (e) => console.error('[ChatClient] socket error:', e));
-
-      socket.on('history', ({ messages = [] }) => {
-        logEl.innerHTML = '';
-        messages.forEach(renderMsg);
-        scrollToBottom();
-      });
-
-      socket.on('message', (msg) => {
-        const stick = atBottom();
-        renderMsg(msg);
-        if (stick) scrollToBottom();
-      });
-
-      socket.on('presence', ({ count }) => {
-        presEl.textContent = `${count} online`;
-        // 🔥 mirror presence into the main header counter
-        const wc = document.getElementById('watching-count');
-        if (wc) wc.textContent = `Spectators Watching: ${count}`;
-      });
-
-      // 🔔 optional: server can emit when a user joins -> show toast in UI
-      socket.on('user_joined', ({ name: joinedName }) => {
-        try {
-          window.dispatchEvent(new CustomEvent('spectator:user_joined', { detail: { name: joinedName } }));
-        } catch {}
-      });
-
-      inputEl?.addEventListener('input', () => {
-        if (!socket || !socket.connected) return;
-        socket.emit('typing', true);
-        clearTimeout(typingTimer);
-        typingTimer = setTimeout(() => socket.emit('typing', false), 1200);
-      });
-
-      socket.on('typing', ({ users = [] }) => {
-        typingEl.textContent = users.length ? `${users.length} typing…` : '';
-      });
-
-      // 🏁 Forward duel end events to the page (spectator-only UI)
-      socket.on('duel_result', (payload = {}) => {
-        try { window.dispatchEvent(new CustomEvent('spectator:duel_result', { detail: payload })); } catch {}
-      });
-      socket.on('match_end', (payload = {}) => {
-        try { window.dispatchEvent(new CustomEvent('spectator:duel_result', { detail: payload })); } catch {}
-      });
-
-      // Clean disconnect on page hide/unload (helps server presence accuracy)
-      const tidy = () => { try { socket.close(); } catch {} };
-      window.addEventListener('pagehide', tidy);
-      window.addEventListener('beforeunload', tidy);
-
-      console.log('[ChatClient] origin:', backendOrigin, 'namespace: /spectator-chat', 'roomId:', roomId, 'user:', name);
     } catch (e) {
-      console.error('[ChatClient] init failed:', e);
+      console.warn('[chat] send error:', e);
+      setTyping('Could not send.');
+      disableSend(false);
     }
-  })();
+  }
+
+  // Wire events
+  form.addEventListener('submit', handleSubmit);
+  send.addEventListener('click', handleSubmit);
+  input.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      // Submit with Enter; Shift+Enter for newline (if you later use textarea)
+      e.preventDefault();
+      handleSubmit(e);
+    }
+  });
+  input.addEventListener('input', () => setTyping(''));
+
+  // Make sure panel is clickable even if a full-screen overlay exists
+  try {
+    const panel = document.getElementById('chat-panel');
+    if (panel) {
+      panel.style.pointerEvents = 'auto';
+      panel.style.zIndex = '6';
+    }
+  } catch {}
+
+  // Socket listeners (defensive: all optional)
+  if (socket) {
+    socket.on('connect', () => setTyping(''));
+    socket.on('disconnect', () => setTyping('Disconnected.'));
+
+    socket.on('presence', (n) => setPresence(n));
+    socket.on('chat:message', (msg) => {
+      if (!msg || !msg.text) return;
+      const who = msg.name || msg.user || 'User';
+      bubble({ who, text: String(msg.text), ts: msg.ts || Date.now(), self: false });
+    });
+
+    // If the backend sends a rate-limit notice
+    socket.on('chat:rate_limited', (ms) => {
+      setTyping(`Slow down a bit${ms ? ` (${Math.ceil(Number(ms)/1000)}s)` : ''}.`);
+    });
+  }
+
+  // Focus input on click inside panel
+  document.getElementById('chat-panel')?.addEventListener('click', () => {
+    try { input.focus({ preventScroll: true }); } catch {}
+  });
+
+  // First paint: keep the send enabled and clear any stale text
+  disableSend(false);
+  setTyping('');
 })();
