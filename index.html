@@ -353,13 +353,13 @@
     })();
   </script>
 
-  <!-- Existing spectator logic -->
-  <script src="scripts/spectatorview.js"></script>
+  <!-- Existing spectator logic (non-module) -->
+  <script src="scripts/spectatorview.js" defer></script>
 
   <!-- ✅ Ensure Socket.IO client is present as a global (works even if ESM import fails) -->
-  <script src="https://cdn.socket.io/4.7.5/socket.io.min.js" crossorigin="anonymous"></script>
+  <script src="https://cdn.socket.io/4.7.5/socket.io.min.js" crossorigin="anonymous" defer></script>
 
   <!-- Realtime chat client (module) -->
-  <script type="module" src="scripts/chatClient.js"></script>
+  <script type="module" src="scripts/chatClient.js" defer></script>
 </body>
 </html>
