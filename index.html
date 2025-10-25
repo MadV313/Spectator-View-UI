@@ -31,12 +31,7 @@
     .audio-toggle:hover { box-shadow: 0 0 10px #00ffff; }
 
     /* simple inline styles for the piles row (uses classes, not IDs) */
-    .piles {
-      margin: 6px 0 10px;
-      color: #cfe9ff;
-      font-size: 13px;
-      opacity: 0.9;
-    }
+    .piles { margin: 6px 0 10px; color: #cfe9ff; font-size: 13px; opacity: 0.9; }
     .piles strong { font-weight: 700; }
   </style>
 
@@ -146,124 +141,168 @@
   <button id="specAudioToggle" class="audio-toggle" aria-label="Mute background music">🔇</button>
 
   <script>
-    // Autoplay-safe music control (unmutes on first tap/keypress)
+    // Autoplay-safe music control (hardened; won't block other scripts if it fails)
     (function setupSpectatorMusic() {
-      const audio = document.getElementById('spec-bgm');
-      const btn   = document.getElementById('specAudioToggle');
-      if (!audio || !btn) return;
-
-      const STORE_KEY = 'sv13_spectator_bgm.muted';
-
-      // Restore saved preference
       try {
-        const stored = localStorage.getItem(STORE_KEY);
-        if (stored !== null) audio.muted = (stored === 'true');
-      } catch {}
+        const audio = document.getElementById('spec-bgm');
+        const btn   = document.getElementById('specAudioToggle');
+        if (!audio || !btn) return;
 
-      updateBtn();
-      audio.play().catch(() => { /* will unlock on first gesture */ });
+        const STORE_KEY = 'sv13_spectator_bgm.muted';
 
-      // First user gesture: ensure playback; unmute unless user previously chose mute
-      const unlock = () => {
-        audio.play().catch(() => {});
+        // Restore saved preference
         try {
-          if (localStorage.getItem(STORE_KEY) !== 'true') {
-            audio.muted = false;
-            updateBtn();
-          }
+          const stored = localStorage.getItem(STORE_KEY);
+          if (stored !== null) audio.muted = (stored === 'true');
         } catch {}
-        cleanupUnlock();
-      };
-      function cleanupUnlock() {
-        window.removeEventListener('pointerdown', unlock, opt);
-        window.removeEventListener('keydown', unlock);
-        document.removeEventListener('visibilitychange', vis);
-      }
-      const opt = { passive: true };
-      window.addEventListener('pointerdown', unlock, opt);
-      window.addEventListener('keydown', unlock);
 
-      // Safari quirk: retry when tab becomes visible
-      const vis = () => { if (!document.hidden) audio.play().catch(() => {}); };
-      document.addEventListener('visibilitychange', vis);
-
-      // Manual toggle — now also flips volume to be extra-safe (+ touch handler for mobile)
-      const toggle = () => {
-        const willMute = !audio.muted;
-        audio.muted = willMute;
-        audio.volume = willMute ? 0 : 1;
-        try { localStorage.setItem(STORE_KEY, String(audio.muted)); } catch {}
         updateBtn();
-        audio.play().catch(() => {}); // keep playback active on unmute
-      };
-      btn.addEventListener('click', toggle);
-      btn.addEventListener('touchend', (e) => { e.preventDefault(); toggle(); }, { passive: false });
+        audio.play().catch(() => { /* will unlock on first gesture */ });
 
-      function updateBtn() {
-        btn.textContent = audio.muted ? '🔇' : '🔊';
-        btn.setAttribute('aria-label', audio.muted ? 'Play background music' : 'Mute background music');
+        // First user gesture: ensure playback; unmute unless user previously chose mute
+        const unlock = () => {
+          audio.play().catch(() => {});
+          try {
+            if (localStorage.getItem(STORE_KEY) !== 'true') {
+              audio.muted = false;
+              audio.volume = 1;
+              updateBtn();
+            }
+          } catch {}
+          cleanupUnlock();
+        };
+        function cleanupUnlock() {
+          window.removeEventListener('pointerdown', unlock, opt);
+          window.removeEventListener('keydown', unlock);
+          document.removeEventListener('visibilitychange', vis);
+        }
+        const opt = { passive: true };
+        window.addEventListener('pointerdown', unlock, opt);
+        window.addEventListener('keydown', unlock);
+
+        // Safari quirk: retry when tab becomes visible
+        const vis = () => { if (!document.hidden) audio.play().catch(() => {}); };
+        document.addEventListener('visibilitychange', vis);
+
+        // Manual toggle — flips muted + volume; click + touch
+        const toggle = () => {
+          const willMute = !audio.muted;
+          audio.muted = willMute;
+          audio.volume = willMute ? 0 : 1;
+          try { localStorage.setItem(STORE_KEY, String(audio.muted)); } catch {}
+          updateBtn();
+          audio.play().catch(() => {}); // keep playback active on unmute
+        };
+        btn.addEventListener('click', toggle);
+        btn.addEventListener('touchend', (e) => { e.preventDefault(); toggle(); }, { passive: false });
+
+        function updateBtn() {
+          btn.textContent = audio.muted ? '🔇' : '🔊';
+          btn.setAttribute('aria-label', audio.muted ? 'Play background music' : 'Mute background music');
+        }
+      } catch (err) {
+        console.error('[Spectator] BGM init failed:', err);
       }
     })();
 
     // 🔵 Flash turn display blue whenever its text changes
     (function flashTurnOnUpdate() {
-      const el = document.getElementById('turn-display');
-      if (!el) return;
-      const applyFlash = () => {
-        el.classList.add('highlight-blue','flash-blue');
-        setTimeout(() => el.classList.remove('flash-blue'), 1600);
-      };
-      // initial nudge in case first write happens immediately
-      setTimeout(applyFlash, 200);
-      const mo = new MutationObserver(applyFlash);
-      mo.observe(el, { childList: true, characterData: true, subtree: true });
+      try {
+        const el = document.getElementById('turn-display');
+        if (!el) return;
+        const applyFlash = () => {
+          el.classList.add('highlight-blue','flash-blue');
+          setTimeout(() => el.classList.remove('flash-blue'), 1600);
+        };
+        // initial nudge in case first write happens immediately
+        setTimeout(applyFlash, 200);
+        const mo = new MutationObserver(applyFlash);
+        mo.observe(el, { childList: true, characterData: true, subtree: true });
+      } catch (err) {
+        console.error('[Spectator] Turn highlighter failed:', err);
+      }
     })();
 
     // 🔔 Join toast: show "@name has joined the madness" for 10s (triggered by chatClient.js dispatch)
     (function joinToastListener() {
-      const mount = document.getElementById('joinToast');
-      if (!mount) return;
+      try {
+        const mount = document.getElementById('joinToast');
+        if (!mount) return;
 
-      let hideTimer = null;
-      const show = (name) => {
-        const safe = String(name || 'A player');
-        mount.textContent = `@${safe} has joined the madness`;
-        mount.classList.add('show','highlight-blue');
-        clearTimeout(hideTimer);
-        hideTimer = setTimeout(() => {
-          mount.classList.remove('show','highlight-blue');
-        }, 10000);
-      };
+        let hideTimer = null;
+        const show = (name) => {
+          const safe = String(name || 'A player');
+          mount.textContent = `@${safe} has joined the madness`;
+          mount.classList.add('show','highlight-blue');
+          clearTimeout(hideTimer);
+          hideTimer = setTimeout(() => {
+            mount.classList.remove('show','highlight-blue');
+          }, 10000);
+        };
 
-      // Listen for a custom event dispatched by chatClient.js:
-      // window.dispatchEvent(new CustomEvent('spectator:user_joined', { detail: { name } }))
-      window.addEventListener('spectator:user_joined', (e) => show(e.detail?.name));
+        window.addEventListener('spectator:user_joined', (e) => show(e.detail?.name));
+      } catch (err) {
+        console.error('[Spectator] Join toast failed:', err);
+      }
     })();
 
-    // 🏁 Duel result panel listener — reacts to custom event from chatClient.js
+    // 🏁 Duel result panel listener — custom event from chatClient.js OR fallback detector below
     (function duelResultListener(){
-      const wrap   = document.getElementById('duelResult');
-      const winner = document.getElementById('duelResultWinner');
-      const reason = document.getElementById('duelResultReason');
-      const close  = document.getElementById('duelResultClose');
-      if (!wrap || !winner || !reason || !close) return;
+      try {
+        const wrap   = document.getElementById('duelResult');
+        const winner = document.getElementById('duelResultWinner');
+        const reason = document.getElementById('duelResultReason');
+        const close  = document.getElementById('duelResultClose');
+        if (!wrap || !winner || !reason || !close) return;
 
-      function show(payload){
-        const w = payload?.winner || payload?.winnerName || 'Unknown';
-        const r = payload?.reason || payload?.summary || '';
-        winner.textContent = `Winner: ${w}`;
-        reason.textContent = r ? String(r) : '';
-        wrap.hidden = false;
-        wrap.classList.add('show');
-      }
-      function hide(){
-        wrap.classList.remove('show');
-        wrap.hidden = true;
-      }
-      close.addEventListener('click', hide);
-      wrap.addEventListener('click', (e) => { if (e.target === wrap) hide(); });
+        let shown = false;
 
-      window.addEventListener('spectator:duel_result', (e) => show(e.detail || {}));
+        function show(payload){
+          if (shown) return; // show once
+          shown = true;
+          const w = payload?.winner || payload?.winnerName || 'Unknown';
+          const r = payload?.reason || payload?.summary || '';
+          winner.textContent = `Winner: ${w}`;
+          reason.textContent = r ? String(r) : '';
+          wrap.hidden = false;
+          wrap.classList.add('show');
+        }
+        function hide(){
+          wrap.classList.remove('show');
+          wrap.hidden = true;
+        }
+        close.addEventListener('click', hide);
+        wrap.addEventListener('click', (e) => { if (e.target === wrap) hide(); });
+
+        // Server-driven path
+        window.addEventListener('spectator:duel_result', (e) => show(e.detail || {}));
+
+        // Client-side fallback: detect HP==0 and infer winner
+        const p1hp = document.getElementById('player1-hp');
+        const p2hp = document.getElementById('player2-hp');
+        const p1n  = document.getElementById('player1-name');
+        const p2n  = document.getElementById('player2-name');
+        if (p1hp && p2hp) {
+          const infer = () => {
+            if (shown) return;
+            const h1 = parseInt((p1hp.textContent || '0').replace(/\D+/g,''), 10) || 0;
+            const h2 = parseInt((p2hp.textContent || '0').replace(/\D+/g,''), 10) || 0;
+            if (h1 <= 0 && h2 > 0) {
+              show({ winner: (p2n?.textContent || 'Opponent'), reason: 'HP reached 0' });
+            } else if (h2 <= 0 && h1 > 0) {
+              show({ winner: (p1n?.textContent || 'Challenger'), reason: 'HP reached 0' });
+            }
+          };
+          // Observe changes to HP spans
+          const mo = new MutationObserver(infer);
+          mo.observe(p1hp, { childList: true, characterData: true, subtree: true });
+          mo.observe(p2hp, { childList: true, characterData: true, subtree: true });
+          // Initial check
+          setTimeout(infer, 250);
+        }
+      } catch (err) {
+        console.error('[Spectator] Duel result listener failed:', err);
+      }
     })();
   </script>
 
@@ -271,36 +310,43 @@
   <a id="hubBtn" class="hub-btn" href="#" role="button">↩ Return to Hub</a>
   <script>
     (function setHubLink(){
-      const qs = new URLSearchParams(location.search);
+      try {
+        const qs = new URLSearchParams(location.search);
 
-      // Prefer explicit token in window / query / localStorage, then normalize
-      let token = (window.PLAYER_TOKEN || qs.get('token') || '');
-      if (!token) {
-        try { token = localStorage.getItem('sv13.token') || ''; } catch {}
+        // Prefer explicit token in window / query / localStorage, then normalize
+        let token = (window.PLAYER_TOKEN || qs.get('token') || '');
+        if (!token) {
+          try { token = localStorage.getItem('sv13.token') || ''; } catch {}
+        }
+        // Strip leading "Bearer " if present
+        if (token && /^Bearer\s+/i.test(token)) token = token.replace(/^Bearer\s+/i, '');
+
+        // API base the hub can reuse
+        const api = (window.API_BASE || qs.get('api') || '').replace(/\/+$/, '');
+
+        // allow override via ?hub=<url> — normalize trailing slash (no doubles)
+        const rawHub = qs.get('hub') || 'https://madv313.github.io/HUB-UI/';
+        const hub = rawHub.replace(/\/+$/, '/') || '/';
+        const url = new URL(hub);
+
+        // Put params the hub will look for
+        if (token) url.searchParams.set('token', token);
+        if (api)   url.searchParams.set('api', api);
+
+        // Redundant copy in the hash too, for hubs that only read location.hash
+        const hash = new URLSearchParams(url.hash.replace(/^#/, ''));
+        if (token && !hash.get('token')) hash.set('token', token);
+        if (api && !hash.get('api'))     hash.set('api', api);
+        url.hash = hash.toString() ? ('#' + hash.toString()) : '';
+
+        const el = document.getElementById('hubBtn');
+        if (el) {
+          el.href = url.toString();
+          console.log('[HubLink]', el.href);
+        }
+      } catch (err) {
+        console.error('[Spectator] setHubLink failed:', err);
       }
-      // Strip leading "Bearer " if present
-      if (token && /^Bearer\s+/i.test(token)) token = token.replace(/^Bearer\s+/i, '');
-
-      // API base the hub can reuse
-      const api = (window.API_BASE || qs.get('api') || '').replace(/\/+$/, '');
-
-      // allow override via ?hub=<url> — keep your GitHub hub default
-      const rawHub = qs.get('hub') || 'https://madv313.github.io/HUB-UI/';
-      const hub = rawHub.replace(/\/+$/, '/') || '/';
-      const url = new URL(hub);
-
-      // Put params the hub will look for
-      if (token) url.searchParams.set('token', token);
-      if (api)   url.searchParams.set('api', api);
-
-      // Redundant copy in the hash too, for hubs that only read location.hash
-      const hash = new URLSearchParams(url.hash.replace(/^#/, ''));
-      if (token && !hash.get('token')) hash.set('token', token);
-      if (api && !hash.get('api'))     hash.set('api', api);
-      url.hash = hash.toString() ? ('#' + hash.toString()) : '';
-
-      const el = document.getElementById('hubBtn');
-      if (el) el.href = url.toString();
     })();
   </script>
 
