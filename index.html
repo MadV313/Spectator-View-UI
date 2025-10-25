@@ -361,5 +361,20 @@
 
   <!-- Realtime chat client (module) -->
   <script type="module" src="scripts/chatClient.js" defer></script>
+
+  <!-- Emergency: make sure no overlay is eating clicks -->
+  <script>
+    (function unblockClicks() {
+      try {
+        const ids = ['coinFlipContainer', 'announcement'];
+        ids.forEach(id => {
+          const el = document.getElementById(id);
+          if (el) el.style.pointerEvents = 'none';
+        });
+        const snow = document.querySelector('.snowfall');
+        if (snow) snow.style.pointerEvents = 'none';
+      } catch {}
+    })();
+  </script>
 </body>
 </html>
