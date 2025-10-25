@@ -55,6 +55,9 @@
       try { console.log('[Spectator] API_BASE =', window.API_BASE); } catch {}
     })();
   </script>
+
+  <!-- 🧽 Net hygiene: installs global fetch/backoff guards BEFORE any network-using scripts -->
+  <script src="scripts/net-hygiene.js" defer></script>
 </head>
 <body>
   <div id="background"></div>
