@@ -26,7 +26,7 @@ body {
   align-items: start;
   padding: 0 12px;
 }
-#spectator-main { min-width: 0; }   /* allow content to shrink nicely */
+#spectator-main { min-width: 0; }
 #chat-panel     { min-width: 0; }
 
 /* Collapse to single column on smaller screens */
@@ -97,9 +97,7 @@ body {
   opacity: 0.9;
   text-align: center;
 }
-.piles strong {
-  font-weight: 700;
-}
+.piles strong { font-weight: 700; }
 
 /* Field & Hand */
 .field, .hand {
@@ -158,10 +156,7 @@ body {
   color: #00ffff;
   text-shadow: 0 0 15px #00ffff;
 }
-
-.practice-mode body {
-  border-top: 4px solid #00ffff;
-}
+.practice-mode body { border-top: 4px solid #00ffff; }
 
 /* 🔊 Audio toggle styling */
 .audio-toggle {
@@ -179,13 +174,9 @@ body {
   user-select: none;
   backdrop-filter: blur(2px);
   transition: box-shadow 0.2s ease;
-  /* ensure nothing blocks clicks */
   pointer-events: auto;
 }
-
-.audio-toggle:hover {
-  box-shadow: 0 0 10px #00ffff;
-}
+.audio-toggle:hover { box-shadow: 0 0 10px #00ffff; }
 
 /* ──────────────────────────────────────────────────────────
    NEW: Spectator Chat panel styling
@@ -199,10 +190,14 @@ body {
   flex-direction: column;
   min-height: 420px;
   max-height: calc(100vh - 160px);
-  position: sticky;        /* keep visible while scrolling */
+  position: sticky;
   top: 20px;
   overflow: hidden;
+
+  /* ⬆ ensure it’s above any global overlay layers (e.g., snowfall, canvases) */
+  z-index: 6;
 }
+#chat-panel, #chat-panel * { pointer-events: auto; }
 
 .chat-header {
   display: flex; justify-content: space-between; align-items: center;
@@ -244,23 +239,30 @@ body {
 .chat-form {
   display:flex; gap:8px; padding: 8px; border-top: 1px solid #00ffff22;
   background: rgba(0,0,0,0.42);
+
+  /* pin the form within the panel when tall */
+  position: sticky;
+  bottom: 0;
 }
+
 #chat-input {
   flex: 1; background: rgba(0,0,0,0.35); border: 1px solid #00ffff22; color: #e8fafe;
   padding: 8px 10px; border-radius: 8px; outline: none;
 }
 #chat-input:focus { border-color: #00ffff88; box-shadow: 0 0 8px #00ffff33; }
+
 #chat-send {
   padding: 8px 12px; border-radius: 8px; border: 1px solid #00ffff55; background: rgba(0,50,60,0.7); color:#bff;
   cursor: pointer;
 }
 #chat-send:hover { box-shadow: 0 0 10px #00ffff44; }
+#chat-send[disabled] { opacity: .6; cursor: not-allowed; }
 
 /* Return to Hub button */
 .hub-btn{
   position: fixed;
   right: 16px;
-  bottom: 70px; /* sits above the audio button */
+  bottom: 70px;
   z-index: 9999;
   background: rgba(0,40,50,0.85);
   color: #bff;
@@ -277,7 +279,6 @@ body {
    NEW: Blue flash/highlight utilities
    ────────────────────────────────────────────────────────── */
 .highlight-blue { color: #00ffff !important; text-shadow: 0 0 12px #00ffff; }
-
 @keyframes pulseBlue {
   0% { box-shadow: 0 0 0 rgba(0,255,255,0); }
   50% { box-shadow: 0 0 18px rgba(0,255,255,0.9); }
@@ -370,20 +371,14 @@ body {
   .spectator-header h1 {
     font-size: 28px;
   }
-  /* Chat fills full width beneath main content on mobile */
-  #chat-panel {
-    position: relative;
-    max-height: none;
-  }
+  #chat-panel { position: relative; max-height: none; }
 
-  /* BIGGER send button on mobile */
   #chat-send {
     padding: 12px 16px;
     font-size: 16px;
     border-width: 2px;
   }
 
-  /* Larger mute button hit area on mobile */
   .audio-toggle {
     padding: 12px 16px;
     font-size: 16px;
