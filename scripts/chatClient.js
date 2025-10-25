@@ -181,6 +181,11 @@ async function getIo() {
         try { window.dispatchEvent(new CustomEvent('spectator:duel_result', { detail: payload })); } catch {}
       });
 
+      // Clean disconnect on page hide/unload (helps server presence accuracy)
+      const tidy = () => { try { socket.close(); } catch {} };
+      window.addEventListener('pagehide', tidy);
+      window.addEventListener('beforeunload', tidy);
+
       console.log('[ChatClient] origin:', backendOrigin, 'namespace: /spectator-chat', 'roomId:', roomId, 'user:', name);
     } catch (e) {
       console.error('[ChatClient] init failed:', e);
