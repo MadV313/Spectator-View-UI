@@ -107,12 +107,21 @@
     window.addEventListener('keydown', unlock);
     document.addEventListener('visibilitychange', vis);
 
-    btn.addEventListener('click', () => {
+    const toggle = () => {
       audio.muted = !audio.muted;
       try { localStorage.setItem(STORE_KEY, String(audio.muted)); } catch {}
       updateBtn();
       audio.play().catch(() => {});
-    });
+    };
+    btn.addEventListener('click', toggle);
+    // Improve mobile reliability
+    btn.addEventListener('touchend', (e) => { e.preventDefault(); toggle(); }, { passive: false });
+
+    // ensure clickable even above overlays
+    try {
+      btn.style.pointerEvents = 'auto';
+      btn.style.zIndex = '10001';
+    } catch {}
   })();
 
   // ---- UI boot ----
@@ -286,6 +295,87 @@
     } catch {}
   }
 
+  // ---- Winner overlay ----
+  let summaryShown = false;
+  function nameOrSticky(key, fallback) {
+    return STICKY_NAMES[key] || $(`#${key}-name`)?.textContent || fallback;
+  }
+  function showWinnerOverlayFrom(stateLike) {
+    if (summaryShown) return;
+    summaryShown = true;
+
+    const overlay = document.createElement('div');
+    overlay.id = 'spectator-summary-overlay';
+    overlay.style.cssText = `
+      position:fixed; inset:0; background:rgba(0,0,0,.78); z-index:10000;
+      display:flex; align-items:center; justify-content:center; padding:24px;`;
+
+    const panel = document.createElement('div');
+    panel.style.cssText = `
+      background:#0f1114; color:#e6e6e6; width:min(900px, 96vw); border-radius:16px;
+      box-shadow: 0 20px 60px rgba(0,0,0,.6); padding:22px 22px 16px;`;
+
+    const wKey = stateLike?.winner || 'player1';
+    const lKey = wKey === 'player1' ? 'player2' : 'player1';
+
+    const title = document.createElement('div');
+    title.style.cssText = 'font-size:24px; font-weight:800; margin-bottom:6px;';
+    title.textContent = `🏆 Winner: ${nameOrSticky(wKey, wKey)}`;
+
+    const sub = document.createElement('div');
+    sub.style.cssText = 'opacity:.8; margin-bottom:14px;';
+    sub.textContent = 'Duel Summary (spectator)';
+
+    const grid = document.createElement('div');
+    grid.style.cssText = 'display:grid; grid-template-columns: 1fr 1fr; gap:14px;';
+
+    const p1 = stateLike?.players?.player1 || {};
+    const p2 = stateLike?.players?.player2 || {};
+    const cardFor = (key, label, P) => {
+      const wrap = document.createElement('div');
+      wrap.style.cssText = 'border:1px solid #26303a; border-radius:12px; padding:12px;';
+      const h = document.createElement('div');
+      h.style.cssText = 'font-weight:700; margin-bottom:8px;';
+      h.textContent = `${label} — ${nameOrSticky(key, key)}`;
+      const list = document.createElement('div');
+      list.innerHTML = `
+        <div>HP: <b>${P.hp ?? 0}</b></div>
+        <div>Field: <b>${(P.field||[]).length}</b></div>
+        <div>Hand: <b>${P.handCount ?? (Array.isArray(P.hand) ? P.hand.length : 0)}</b></div>
+        <div>Deck: <b>${P.deckCount ?? (Array.isArray(P.deck) ? P.deck.length : 0)}</b></div>
+        <div>Discard: <b>${P.discardCount ?? (Array.isArray(P.discardPile) ? P.discardPile.length : 0)}</b></div>
+      `;
+      wrap.appendChild(h); wrap.appendChild(list);
+      return wrap;
+    };
+    grid.appendChild(cardFor('player1', wKey === 'player1' ? 'Winner' : 'Opponent', p1));
+    grid.appendChild(cardFor('player2', wKey === 'player2' ? 'Winner' : 'Opponent', p2));
+
+    const close = document.createElement('button');
+    close.textContent = 'Close';
+    close.style.cssText = 'margin-top:14px; padding:10px 14px; border-radius:10px; border:1px solid #2b3946; background:#16202a; color:#e6e6e6; cursor:pointer;';
+    close.onclick = () => overlay.remove();
+
+    panel.appendChild(title);
+    panel.appendChild(sub);
+    panel.appendChild(grid);
+    panel.appendChild(close);
+
+    overlay.appendChild(panel);
+    document.body.appendChild(overlay);
+  }
+
+  // Listen for duel-end events forwarded by chatClient.js
+  window.addEventListener('spectator:duel_result', (e) => {
+    try {
+      const payload = e.detail || {};
+      if (payload && payload.winner) {
+        showWinnerOverlayFrom(payload);
+        pollMs = Math.max(pollMs, MAX_POLL_MS); // slow down polling after finish
+      }
+    } catch {}
+  });
+
   // ---- Normalizer: matches your live payload
   function normalizeState(raw) {
     const current =
@@ -369,13 +459,15 @@
     const vm = {
       currentPlayer: current,
       spectatorCount: watcherCount,
-      players: { player1: P1, player2: P2 }
+      players: { player1: P1, player2: P2 },
+      winner: raw?.winner || null
     };
 
     try {
       console.log('[Spectator] normalized:', {
         turn: vm.currentPlayer,
         spectators: vm.spectatorCount,
+        winner: vm.winner || '(none)',
         p1: { name: P1.name, hp: P1.hp, field: P1.field.length, hand: P1.handCount, deck: P1.deckCount, discard: P1.discardCount },
         p2: { name: P2.name, hp: P2.hp, field: P2.field.length, hand: P2.handCount, deck: P2.deckCount, discard: P2.discardCount }
       });
@@ -391,8 +483,24 @@
     return current || 'player1';
   }
 
+  function detectWinnerFromState(vm) {
+    if (vm.winner) return vm.winner;
+    const p1hp = Number(vm.players?.player1?.hp ?? 0);
+    const p2hp = Number(vm.players?.player2?.hp ?? 0);
+    if (p1hp <= 0 && p2hp > 0) return 'player2';
+    if (p2hp <= 0 && p1hp > 0) return 'player1';
+    if (p1hp <= 0 && p2hp <= 0) return 'player1'; // tie-breaker
+    return null;
+  }
+
   function renderSpectatorView(rawState) {
     const state = normalizeState(rawState);
+
+    // Spectator presence count (keeps header in sync with chat presence)
+    const wc = document.getElementById('watching-count');
+    if (wc && Number.isFinite(state.spectatorCount)) {
+      wc.textContent = `Spectators Watching: ${state.spectatorCount}`;
+    }
 
     const turnName = resolveTurnLabel(state.currentPlayer, state.players);
     setText('#turn-display', `Current Turn: ${turnName}`);
@@ -404,6 +512,14 @@
 
     renderPlayer('player1', state.players.player1);
     renderPlayer('player2', state.players.player2);
+
+    // Winner overlay (once)
+    const computedWinner = detectWinnerFromState(state);
+    if (computedWinner && !summaryShown) {
+      showWinnerOverlayFrom({ ...state, winner: computedWinner });
+      // after finish, relax polling to reduce API pressure
+      pollMs = Math.max(pollMs, MAX_POLL_MS);
+    }
   }
 
   // ---- Polling with robust backoff on 429 (and temporary errors) ----
