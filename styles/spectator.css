@@ -342,6 +342,8 @@ body {
   opacity: 0;
   transition: opacity .2s ease;
 }
+/* Ensure the end-of-duel modal always accepts clicks */
+.duel-result { pointer-events: auto; }
 .duel-result.show { opacity: 1; }
 
 .duel-result__card {
@@ -354,6 +356,8 @@ body {
   color: #e8fafe;
   text-align: center;
 }
+/* Ensure the end-of-duel modal always accepts clicks */
+.duel-result__card { pointer-events: auto; }
 .duel-result__title  { font-size: 20px; font-weight: 800; color: #8ff; margin-bottom: 8px; }
 .duel-result__winner { font-size: 18px; margin: 6px 0; text-shadow: 0 0 10px #00ffff; }
 .duel-result__reason { font-size: 14px; opacity: .9; color: #cfe9ff; }
@@ -366,6 +370,8 @@ body {
   color: #bff;
   cursor: pointer;
 }
+/* Ensure the end-of-duel modal always accepts clicks */
+.duel-result__close { pointer-events: auto; cursor: pointer; }
 .duel-result__close:hover { box-shadow: 0 0 10px #00ffff44; }
 
 /* Responsive tweaks */
