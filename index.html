@@ -56,8 +56,8 @@
     })();
   </script>
 
-  <!-- 🧽 Net hygiene: installs global fetch/backoff guards BEFORE any network-using scripts -->
-  <script src="scripts/net-hygiene.js" defer></script>
+  <!-- 🧽 Net hygiene MUST be a module (the file uses ESM exports). Load it before network-using scripts. -->
+  <script type="module" src="scripts/net-hygiene.js"></script>
 </head>
 <body>
   <div id="background"></div>
@@ -419,7 +419,7 @@
       startObs();
     }
 
-    // 5) Belt & suspenders: periodic sanity sync (lightweight)
+    // 5) Belt & suspenders: periodic sanity sync (lightweight; render-only, no network)
     setInterval(() => { if (last !== null) render(last); }, 5000);
   })();
   </script>
