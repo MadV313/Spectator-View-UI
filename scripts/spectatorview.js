@@ -522,7 +522,7 @@
     }
   }
 
-  // ---- Polling with robust backoff on 429 (and temporary errors) ----
+  // ---- Polling with robust backoff on 429 (and temporary errors)
   let pollMs = 3000;
   const BASE_POLL_MS = 3000;
   const MAX_POLL_MS = 15000;
@@ -533,30 +533,55 @@
     return next;
   }
 
+  // ETag + last-good snapshot to avoid flicker and cut 429s
+  let lastETag = null;
+  let lastGoodState = null;
+
   async function fetchDuelStateOnce() {
     const buildUrl = (path) => {
       const url = new URL(apiUrl(path), location.origin);
       if (mode !== 'practice' && sessionId) url.searchParams.set('session', sessionId);
       url.searchParams.set('safeView', 'true');
+      // when no duel exists, return a harmless stub instead of 404 → easier polling
+      url.searchParams.set('allowEmpty', 'true');
       if (TOKEN) url.searchParams.set('token', TOKEN);
       return url;
     };
 
-    const candidates = ['/duel/state'];
+    // Prefer the live endpoint; keep the old heartbeat as a last resort
+    const candidates = ['/duel/current', '/duel/state'];
 
     let lastErr = null;
     for (const path of candidates) {
       try {
         const url = buildUrl(path);
-        const res = await fetch(url.toString(), { cache: 'no-store' });
+        const headers = { 'Cache-Control': 'no-cache' };
+        if (lastETag) headers['If-None-Match'] = lastETag;
+
+        const res = await fetch(url.toString(), { cache: 'no-store', headers });
+
+        if (res.status === 304 && lastGoodState) {
+          // Not modified → reuse last snapshot (no UI churn)
+          pollMs = BASE_POLL_MS;
+          return lastGoodState;
+        }
+
         if (!res.ok) {
           if (res.status === 429) pollMs = bumpBackoff(pollMs);
           else if (res.status >= 500) pollMs = bumpBackoff(pollMs);
           throw new Error(`Failed (${res.status}) on ${path}`);
         }
+
         // success → reset backoff
         pollMs = BASE_POLL_MS;
-        return await res.json();
+
+        // Track ETag for conditional next time
+        const et = res.headers.get('ETag');
+        if (et) lastETag = et;
+
+        const json = await res.json();
+        lastGoodState = json;
+        return json;
       } catch (err) {
         lastErr = err;
       }
@@ -577,7 +602,7 @@
     }
   }
 
-  // ---- Manifest loader (non-blocking; best-effort) ----
+  // ---- Manifest loader (non-blocking; best-effort)
   async function loadManifest() {
     try {
       const url = `${IMG_BASE}/manifest.json`;
