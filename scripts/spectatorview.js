@@ -549,7 +549,7 @@
     };
 
     // Prefer the live endpoint; keep the old heartbeat as a last resort
-    const candidates = ['/duel/current', '/duel/state'];
+    const candidates = ['/duel/state', '/duel/current'];
 
     let lastErr = null;
     for (const path of candidates) {
