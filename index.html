@@ -362,6 +362,22 @@
   <!-- Realtime chat client (module) -->
   <script type="module" src="scripts/chatClient.js" defer></script>
 
+  <!-- Mirror chat presence into "Spectators Watching" line -->
+  <script>
+    (function mirrorPresenceToWatching() {
+      try {
+        const el = document.getElementById('watching-count');
+        const render = (n) => { if (el) el.textContent = `Spectators Watching: ${Number(n)||0}`; };
+        // Update when chatClient reports presence
+        window.addEventListener('spectator:presence', (e) => render(e.detail?.count));
+        // Fallback: if chat header already has a number, use it on load
+        const pres = document.getElementById('chat-presence');
+        const n = pres && (pres.textContent.match(/\d+/)?.[0]);
+        if (n) render(n);
+      } catch {}
+    })();
+  </script>
+
   <!-- Emergency: make sure no overlay is eating clicks -->
   <script>
     (function unblockClicks() {
