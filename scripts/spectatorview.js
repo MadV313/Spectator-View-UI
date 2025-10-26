@@ -9,7 +9,9 @@
 
   // Token & API base (normalize to always include /api)
   const TOKEN = (window.PLAYER_TOKEN || qs.get('token') || '').trim();
-  const rawApi = (window.API_BASE || qs.get('api') || '/api').replace(/\/+$/, '');
+  const apiParamRaw = qs.get('api');
+  let apiParam = apiParamRaw ? decodeURIComponent(apiParamRaw) : '';
+  const rawApi = (window.API_BASE || apiParam || '/api').replace(/\/+$/, '');
   const API_BASE = rawApi.endsWith('/api') ? rawApi : `${rawApi}/api`;
 
   // Card images
@@ -555,7 +557,7 @@
     for (const path of candidates) {
       try {
         const url = buildUrl(path);
-        const headers = { 'Cache-Control': 'no-cache' };
+        const headers = { 'Cache-Control': 'no-cache', Pragma: 'no-cache' };
         if (lastETag) headers['If-None-Match'] = lastETag;
 
         const res = await fetch(url.toString(), { cache: 'no-store', headers });
