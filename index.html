@@ -362,20 +362,66 @@
   <!-- Realtime chat client (module) -->
   <script type="module" src="scripts/chatClient.js" defer></script>
 
-  <!-- Mirror chat presence into "Spectators Watching" line -->
+  <!-- Strong sync: keep "Spectators Watching" in lockstep with chat presence -->
   <script>
-    (function mirrorPresenceToWatching() {
-      try {
-        const el = document.getElementById('watching-count');
-        const render = (n) => { if (el) el.textContent = `Spectators Watching: ${Number(n)||0}`; };
-        // Update when chatClient reports presence
-        window.addEventListener('spectator:presence', (e) => render(e.detail?.count));
-        // Fallback: if chat header already has a number, use it on load
-        const pres = document.getElementById('chat-presence');
-        const n = pres && (pres.textContent.match(/\d+/)?.[0]);
-        if (n) render(n);
-      } catch {}
-    })();
+  (function strongPresenceSync(){
+    let last = null;
+
+    const $ = (id) => document.getElementById(id);
+    const watch = () => $('watching-count');
+    const pres  = () => $('chat-presence');
+
+    function parseNum(text){
+      const m = String(text||'').match(/\d+/);
+      return m ? Number(m[0]) : 0;
+    }
+
+    function render(n){
+      if (!Number.isFinite(n)) n = 0;
+      last = n;
+      const w = watch(); if (w) w.textContent = `Spectators Watching: ${n}`;
+      const p = pres();  if (p) p.textContent = `${n} online`;
+    }
+
+    // 1) Trust chatClient's event as the source of truth
+    window.addEventListener('spectator:presence', (e) => {
+      const n = Number(e.detail && e.detail.count);
+      if (Number.isFinite(n)) render(n);
+    });
+
+    // 2) If any other script resets either label, snap it back
+    const mo = new MutationObserver(() => {
+      const wNum = parseNum(watch()?.textContent);
+      const pNum = parseNum(pres()?.textContent);
+      const cand = Number.isFinite(pNum) ? pNum : wNum;
+
+      if (last === null || (Number.isFinite(cand) && cand !== last)) {
+        render(cand);
+      } else {
+        render(last);
+      }
+    });
+
+    const startObs = () => {
+      const w = watch(); const p = pres();
+      if (w) mo.observe(w, { childList:true, characterData:true, subtree:true });
+      if (p) mo.observe(p, { childList:true, characterData:true, subtree:true });
+    };
+
+    // 3) Initial value (fallback to whatever chat-presence shows on load)
+    const initial = parseNum(pres()?.textContent);
+    render(initial);
+
+    // 4) Start observers after DOM is ready
+    if (document.readyState === 'loading') {
+      document.addEventListener('DOMContentLoaded', startObs, { once:true });
+    } else {
+      startObs();
+    }
+
+    // 5) Belt & suspenders: periodic sanity sync (lightweight)
+    setInterval(() => { if (last !== null) render(last); }, 5000);
+  })();
   </script>
 
   <!-- Emergency: make sure no overlay is eating clicks -->
