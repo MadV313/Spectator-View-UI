@@ -550,17 +550,17 @@
       return url;
     };
 
-    // Prefer the live endpoint; keep the old heartbeat as a last resort
-    const candidates = ['/duel/state', '/duel/current'];
+    // Prefer live endpoint first; keep the old heartbeat as a fallback
+    const candidates = ['/duel/current', '/duel/state'];
 
     let lastErr = null;
     for (const path of candidates) {
       try {
         const url = buildUrl(path);
-        const headers = { 'Cache-Control': 'no-cache', Pragma: 'no-cache' };
+        const headers = { 'Cache-Control': 'no-cache' }; // ❌ no 'Pragma' (breaks CORS)
         if (lastETag) headers['If-None-Match'] = lastETag;
 
-        const res = await fetch(url.toString(), { cache: 'no-store', headers });
+        const res = await fetch(url.toString(), { cache: 'no-store', headers, mode: 'cors' });
 
         if (res.status === 304 && lastGoodState) {
           // Not modified → reuse last snapshot (no UI churn)
