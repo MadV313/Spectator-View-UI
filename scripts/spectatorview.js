@@ -1,35 +1,80 @@
 // spectator view UI /scripts/spectatorview.js
 (function () {
-  const qs = new URLSearchParams(window.location.search);
+  // -------- helpers --------
+  const stripTrailingSlashes = (s) => (s || '').replace(/\/+$/, '');
+  const stripApiSuffix = (s) => stripTrailingSlashes(s || '').replace(/\/api$/i, '');
+  const toQS = (obj) =>
+    Object.entries(obj)
+      .filter(([, v]) => v != null && v !== '')
+      .map(([k, v]) => `${encodeURIComponent(k)}=${encodeURIComponent(v)}`)
+      .join('&');
+
+  // Merge params from ?search and #hash (search wins)
+  function readUrlParams() {
+    const search = new URLSearchParams(location.search);
+    const hashRaw = (location.hash || '').replace(/^#/, '');
+    const hash = new URLSearchParams(hashRaw);
+    const get = (k) => {
+      const v = (search.get(k) ?? '').trim();
+      if (v) return v;
+      const hv = (hash.get(k) ?? '').trim();
+      return hv;
+    };
+    return {
+      mode: (get('mode') || 'duel').toLowerCase(),
+      session: get('session') || get('duelId') || '',
+      user: get('user') || '',
+      token: get('token') || '',
+      api: (get('api') || '').replace(/\/+$/, ''),
+      me: (get('me') || '').replace(/\/+$/, ''),
+      imgbase: (get('imgbase') || '').replace(/\/+$/, ''),
+      hub: get('hub') || '' // base URL to return to Hub
+    };
+  }
+
+  const params = readUrlParams();
 
   // ---- IDs / params ----
-  const mode = (qs.get('mode') || 'duel').toLowerCase();
-  const sessionId = qs.get('session') || qs.get('duelId') || '';
-  const userName = qs.get('user') || '';
+  const mode = params.mode;
+  const sessionId = params.session;
+  const userName = params.user;
 
-  // Token & API base (normalize to always include /api)
-  const TOKEN = (window.PLAYER_TOKEN || qs.get('token') || '').trim();
-  const apiParamRaw = qs.get('api');
-  let apiParam = apiParamRaw ? decodeURIComponent(apiParamRaw) : '';
-  const rawApi = (window.API_BASE || apiParam || '/api').replace(/\/+$/, '');
+  // Token & API base (normalize API_BASE to always include /api)
+  const TOKEN = (window.PLAYER_TOKEN || params.token || '').trim();
+  const rawApiParam = params.api; // may be root or already /api
+  const rawApi = (window.API_BASE || rawApiParam || '/api').replace(/\/+$/, '');
   const API_BASE = rawApi.endsWith('/api') ? rawApi : `${rawApi}/api`;
 
+  // Derive ME base: prefer explicit ?me=, else root of API
+  const ME_BASE = stripTrailingSlashes(params.me || stripApiSuffix(API_BASE));
+
+  // Persist for Hub round-trips (HUB-UI reads these keys)
+  try {
+    if (TOKEN) localStorage.setItem('sv13.token', TOKEN);
+    // Store API root (without /api) so Hub can pass correct bases forward
+    const apiRootForStorage = stripApiSuffix(API_BASE);
+    if (apiRootForStorage) localStorage.setItem('sv13.api', apiRootForStorage);
+    if (ME_BASE) localStorage.setItem('sv13.me', ME_BASE);
+  } catch {}
+
   // Card images
-  const IMG_BASE = ((qs.get('imgbase') || 'images/cards') + '').replace(/\/+$/, '');
+  const IMG_BASE = stripTrailingSlashes(params.imgbase || 'images/cards');
   // Manifest (loaded on boot if present)
   let CARD_MANIFEST = null;      // object map { "095": "095_Name_Attack.png", back?: "..." }
   let MANIFEST_READY = false;
   let BACK_OVERRIDE = null;      // string filename from manifest.back when present
 
   // 🔒 Sticky names cache so later sparse payloads can’t revert to generic labels
-  const STICKY_NAMES = {
-    player1: null,
-    player2: null,
-  };
+  const STICKY_NAMES = { player1: null, player2: null };
 
   // URL name hints (optional)
-  const P1_HINT = qs.get('p1') || qs.get('player1') || qs.get('p1name') || userName || null;
-  const P2_HINT = qs.get('p2') || qs.get('player2') || qs.get('p2name') || null;
+  const P1_HINT = (new URLSearchParams(location.search).get('p1') ||
+                  new URLSearchParams(location.search).get('player1') ||
+                  new URLSearchParams(location.search).get('p1name') ||
+                  userName || null);
+  const P2_HINT = (new URLSearchParams(location.search).get('p2') ||
+                  new URLSearchParams(location.search).get('player2') ||
+                  new URLSearchParams(location.search).get('p2name') || null);
 
   // Fallback chain for card backs (prevents 404 spam). We’ll prepend manifest.back if available.
   const STATIC_BACK_CHAIN = [
@@ -43,7 +88,7 @@
       : STATIC_BACK_CHAIN.slice();
   }
 
-  try { console.log('[Spectator] API_BASE =', API_BASE, 'IMG_BASE =', IMG_BASE, 'mode =', mode); } catch {}
+  try { console.log('[Spectator] API_BASE =', API_BASE, 'IMG_BASE =', IMG_BASE, 'mode =', mode, 'ME_BASE =', ME_BASE); } catch {}
 
   // ---- small helpers ----
   const $ = (sel) => document.querySelector(sel);
@@ -111,7 +156,7 @@
 
     const toggle = () => {
       audio.muted = !audio.muted;
-      try { localStorage.setItem(STORE_KEY, String(audio.muted)); } catch {}
+      try { localStorage.setItem('STORE_KEY', String(audio.muted)); } catch {}
       updateBtn();
       audio.play().catch(() => {});
     };
@@ -141,6 +186,33 @@
     console.error('[Spectator] No session id provided.');
     return;
   }
+
+  // ---- Return to Hub link rewrite (propagate token/api/me) ----
+  (function wireReturnToHub() {
+    const a = document.getElementById('return-to-hub');
+    if (!a) return;
+
+    // Prefer explicit ?hub=… base if provided; otherwise keep existing href or default HUB-UI path
+    let baseHref = params.hub || a.getAttribute('href') || a.href || 'https://madv313.github.io/HUB-UI/';
+
+    // Normalize base; if it's a full Hub URL that already has params, we’ll merge (search wins)
+    try {
+      const u = new URL(baseHref, location.href);
+      const existing = new URLSearchParams(u.search);
+      if (TOKEN)    existing.set('token', TOKEN);
+      const apiRoot = stripApiSuffix(API_BASE);
+      if (apiRoot)  existing.set('api', apiRoot);
+      if (ME_BASE)  existing.set('me', ME_BASE);
+      u.search = `?${existing.toString()}`;
+      a.href = u.toString();
+    } catch {
+      // Fallback string concat
+      const apiRoot = stripApiSuffix(API_BASE);
+      const qs = toQS({ token: TOKEN, api: apiRoot, me: ME_BASE });
+      const sep = baseHref.includes('?') ? '&' : '?';
+      a.href = qs ? `${baseHref}${sep}${qs}` : baseHref;
+    }
+  })();
 
   // ---- Card id helpers ----
   function to3(n) { return String(n).padStart(3, '0'); }
@@ -557,7 +629,7 @@
     for (const path of candidates) {
       try {
         const url = buildUrl(path);
-        const headers = { 'Cache-Control': 'no-cache' }; // ❌ no 'Pragma' (breaks CORS)
+        const headers = { 'Cache-Control': 'no-cache' };
         if (lastETag) headers['If-None-Match'] = lastETag;
 
         const res = await fetch(url.toString(), { cache: 'no-store', headers, mode: 'cors' });
