@@ -66,14 +66,24 @@ test('practice CSS targets the body correctly', () => {
   assert.doesNotMatch(css, /\.practice-mode\s+body/);
 });
 
-test('card manifest covers the canonical 000-127 set', () => {
+test('card manifest covers 000-127 and points at the verified collection asset host', () => {
   assert.equal(Object.keys(manifest.cards).length, 128);
-  assert.equal(manifest.cards['000'].image, '000_WinterlandDeathDeck_Back.png');
+  assert.equal(manifest.assetBase, 'https://collection.sv13tcg.com/images/cards');
+  assert.equal(manifest.cardBack, '000_CardBack_Unique.png');
+  assert.equal(manifest.cards['000'].image, '000_CardBack_Unique.png');
   assert.equal(manifest.cards['034'].image, '034_CombatBoots_Defense.png');
   assert.ok(manifest.cards['127']);
+  assert.match(spectator, /https:\/\/collection\.sv13tcg\.com\/images\/cards/);
+  assert.doesNotMatch(spectator, /sv13tcg\.com\/assets\/cards/);
 });
 
-
+test('linked spectator identity is never browser-authored and can resolve from server chat events', () => {
+  assert.match(chat, /Resolving linked spectator/);
+  assert.match(chat, /Spectating as \$\{clean\}/);
+  assert.match(chat, /socket\.on\('identity'/);
+  assert.match(chat, /msg\.userId[\s\S]*socket\.id[\s\S]*setViewerIdentity\(msg\.name\)/);
+  assert.doesNotMatch(chat, /searchParams\.get\(['"]name['"]\)|qs\.get\(['"]user['"]\)|displayName:\s*viewer/);
+});
 
 test('winner rendering is single-source and server-authoritative', () => {
   assert.match(html, /id="duelResult"/);
