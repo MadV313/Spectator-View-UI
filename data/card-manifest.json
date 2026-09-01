@@ -1,0 +1,774 @@
+{
+  "version": 1,
+  "source": "Duel-Bot logic/CoreMasterReference.json",
+  "cards": {
+    "000": {
+      "name": "WinterLand Death Deck (Face-Down)",
+      "type": "Unique",
+      "rarity": "Unique",
+      "image": "000_WinterlandDeathDeck_Back.png"
+    },
+    "001": {
+      "name": "M4-A1",
+      "type": "Attack",
+      "rarity": "Rare",
+      "image": "001_M4A1_Attack.png"
+    },
+    "002": {
+      "name": "AKM",
+      "type": "Attack",
+      "rarity": "Rare",
+      "image": "002_AKM_Attack.png"
+    },
+    "003": {
+      "name": "Mosin-Nagant",
+      "type": "Attack",
+      "rarity": "Rare",
+      "image": "003_MosinNagant_Attack.png"
+    },
+    "004": {
+      "name": "SKS",
+      "type": "Attack",
+      "rarity": "Common",
+      "image": "004_SKS_Attack.png"
+    },
+    "005": {
+      "name": "CR-527",
+      "type": "Attack",
+      "rarity": "Uncommon",
+      "image": "005_CR527_Attack.png"
+    },
+    "006": {
+      "name": "CR-550 Savanna",
+      "type": "Attack",
+      "rarity": "Uncommon",
+      "image": "006_CR550Savanna_Attack.png"
+    },
+    "007": {
+      "name": "BK-133",
+      "type": "Attack",
+      "rarity": "Rare",
+      "image": "007_BK133_Attack.png"
+    },
+    "008": {
+      "name": "BK-18",
+      "type": "Attack",
+      "rarity": "Common",
+      "image": "008_BK18_Attack.png"
+    },
+    "009": {
+      "name": "MK II",
+      "type": "Attack",
+      "rarity": "Uncommon",
+      "image": "009_MKII_Attack.png"
+    },
+    "010": {
+      "name": "FX-45",
+      "type": "Attack",
+      "rarity": "Common",
+      "image": "010_FX45_Attack.png"
+    },
+    "011": {
+      "name": "Deagle",
+      "type": "Attack",
+      "rarity": "Rare",
+      "image": "011_Deagle_Attack.png"
+    },
+    "012": {
+      "name": "VSS Vintorez",
+      "type": "Attack",
+      "rarity": "Common",
+      "image": "012_VSSVintorez_Attack.png"
+    },
+    "013": {
+      "name": "SVD",
+      "type": "Attack",
+      "rarity": "Rare",
+      "image": "013_SVD_Attack.png"
+    },
+    "014": {
+      "name": "M70 Tundra",
+      "type": "Attack",
+      "rarity": "Rare",
+      "image": "014_M70Tundra_Attack.png"
+    },
+    "015": {
+      "name": "IZH-18",
+      "type": "Attack",
+      "rarity": "Common",
+      "image": "015_IZH18_Attack.png"
+    },
+    "016": {
+      "name": "Sawed-off Shotgun",
+      "type": "Attack",
+      "rarity": "Rare",
+      "image": "016_SawedoffShotgun_Attack.png"
+    },
+    "017": {
+      "name": "USG-45",
+      "type": "Attack",
+      "rarity": "Rare",
+      "image": "017_USG45_Attack.png"
+    },
+    "018": {
+      "name": "UMP-45",
+      "type": "Attack",
+      "rarity": "Common",
+      "image": "018_UMP45_Attack.png"
+    },
+    "019": {
+      "name": "KA-74",
+      "type": "Attack",
+      "rarity": "Uncommon",
+      "image": "019_KA74_Attack.png"
+    },
+    "020": {
+      "name": "KA-M",
+      "type": "Attack",
+      "rarity": "rare",
+      "image": "020_KAM_Attack.png"
+    },
+    "021": {
+      "name": "FAL",
+      "type": "Attack",
+      "rarity": "uncommon",
+      "image": "021_FAL_Attack.png"
+    },
+    "022": {
+      "name": "AK-101",
+      "type": "Attack",
+      "rarity": "rare",
+      "image": "022_AK101_Attack.png"
+    },
+    "023": {
+      "name": "AK-74",
+      "type": "Attack",
+      "rarity": "rare",
+      "image": "023_AK74_Attack.png"
+    },
+    "024": {
+      "name": "M16-A2",
+      "type": "Attack",
+      "rarity": "common",
+      "image": "024_M16A2_Attack.png"
+    },
+    "025": {
+      "name": "SG5-K",
+      "type": "Attack",
+      "rarity": "common",
+      "image": "025_SG5K_Attack.png"
+    },
+    "026": {
+      "name": "MP5-K",
+      "type": "Attack",
+      "rarity": "common",
+      "image": "026_MP5K_Attack.png"
+    },
+    "027": {
+      "name": "Repeater",
+      "type": "Attack",
+      "rarity": "uncommon",
+      "image": "027_Repeater_Attack.png"
+    },
+    "028": {
+      "name": "Derringer",
+      "type": "Attack",
+      "rarity": "rare",
+      "image": "028_Derringer_Attack.png"
+    },
+    "029": {
+      "name": "Longhorn",
+      "type": "Attack",
+      "rarity": "rare",
+      "image": "029_Longhorn_Attack.png"
+    },
+    "030": {
+      "name": "Crossbow",
+      "type": "Attack",
+      "rarity": "uncommon",
+      "image": "030_Crossbow_Attack.png"
+    },
+    "031": {
+      "name": "Tactical Vest",
+      "type": "Defense",
+      "rarity": "rare",
+      "image": "031_TacticalVest_Defense.png"
+    },
+    "032": {
+      "name": "Ballistic Helmet",
+      "type": "Defense",
+      "rarity": "uncommon",
+      "image": "032_BallisticHelmet_Defense.png"
+    },
+    "033": {
+      "name": "Assault Helmet",
+      "type": "Defense",
+      "rarity": "uncommon",
+      "image": "033_AssaultHelmet_Defense.png"
+    },
+    "034": {
+      "name": "Combat Boots",
+      "type": "Defense",
+      "rarity": "common",
+      "image": "034_CombatBoots_Defense.png"
+    },
+    "035": {
+      "name": "Plate Carrier",
+      "type": "Defense",
+      "rarity": "uncommon",
+      "image": "035_PlateCarrier_Defense.png"
+    },
+    "036": {
+      "name": "NBC Suit",
+      "type": "Defense",
+      "rarity": "common",
+      "image": "036_NBCSuit_Defense.png"
+    },
+    "037": {
+      "name": "Motorbike Helmet",
+      "type": "Defense",
+      "rarity": "uncommon",
+      "image": "037_MotorbikeHelmet_Defense.png"
+    },
+    "038": {
+      "name": "Gorka Jacket",
+      "type": "Defense",
+      "rarity": "uncommon",
+      "image": "038_GorkaJacket_Defense.png"
+    },
+    "039": {
+      "name": "Gorka Pants",
+      "type": "Defense",
+      "rarity": "rare",
+      "image": "039_GorkaPants_Defense.png"
+    },
+    "040": {
+      "name": "Combat Gloves",
+      "type": "Defense",
+      "rarity": "rare",
+      "image": "040_CombatGloves_Defense.png"
+    },
+    "041": {
+      "name": "Hunter Jacket",
+      "type": "Defense",
+      "rarity": "uncommon",
+      "image": "041_HunterJacket_Defense.png"
+    },
+    "042": {
+      "name": "Tactical Shirt",
+      "type": "Defense",
+      "rarity": "common",
+      "image": "042_TacticalShirt_Defense.png"
+    },
+    "043": {
+      "name": "Paramedic Jacket",
+      "type": "Defense",
+      "rarity": "uncommon",
+      "image": "043_ParamedicJacket_Defense.png"
+    },
+    "044": {
+      "name": "Press Vest",
+      "type": "Defense",
+      "rarity": "rare",
+      "image": "044_PressVest_Defense.png"
+    },
+    "045": {
+      "name": "Firefighter Pants",
+      "type": "Defense",
+      "rarity": "common",
+      "image": "045_FirefighterPants_Defense.png"
+    },
+    "046": {
+      "name": "M65 Jacket",
+      "type": "Defense",
+      "rarity": "rare",
+      "image": "046_M65Jacket_Defense.png"
+    },
+    "047": {
+      "name": "Riders Jacket",
+      "type": "Defense",
+      "rarity": "rare",
+      "image": "047_RidersJacket_Defense.png"
+    },
+    "048": {
+      "name": "Leather Shoes",
+      "type": "Defense",
+      "rarity": "uncommon",
+      "image": "048_LeatherShoes_Defense.png"
+    },
+    "049": {
+      "name": "Tracksuit Jacket",
+      "type": "Defense",
+      "rarity": "uncommon",
+      "image": "049_TracksuitJacket_Defense.png"
+    },
+    "050": {
+      "name": "Military Boots",
+      "type": "Defense",
+      "rarity": "common",
+      "image": "050_MilitaryBoots_Defense.png"
+    },
+    "051": {
+      "name": "Field Vest",
+      "type": "Defense",
+      "rarity": "common",
+      "image": "051_FieldVest_Defense.png"
+    },
+    "052": {
+      "name": "Chest Holster",
+      "type": "Defense",
+      "rarity": "common",
+      "image": "052_ChestHolster_Defense.png"
+    },
+    "053": {
+      "name": "Stabproof Vest",
+      "type": "Defense",
+      "rarity": "uncommon",
+      "image": "053_StabproofVest_Defense.png"
+    },
+    "054": {
+      "name": "Assault Backpack",
+      "type": "Defense",
+      "rarity": "uncommon",
+      "image": "054_AssaultBackpack_Defense.png"
+    },
+    "055": {
+      "name": "Drybag Backpack",
+      "type": "Defense",
+      "rarity": "common",
+      "image": "055_DrybagBackpack_Defense.png"
+    },
+    "056": {
+      "name": "Tactical Backpack",
+      "type": "Defense",
+      "rarity": "common",
+      "image": "056_TacticalBackpack_Defense.png"
+    },
+    "057": {
+      "name": "Skate Helmet",
+      "type": "Defense",
+      "rarity": "uncommon",
+      "image": "057_SkateHelmet_Defense.png"
+    },
+    "058": {
+      "name": "Boonie Hat",
+      "type": "Defense",
+      "rarity": "rare",
+      "image": "058_BoonieHat_Defense.png"
+    },
+    "059": {
+      "name": "Welding Mask",
+      "type": "Defense",
+      "rarity": "rare",
+      "image": "059_WeldingMask_Defense.png"
+    },
+    "060": {
+      "name": "Improvised Vest",
+      "type": "Defense",
+      "rarity": "Rare",
+      "image": "060_ImprovisedVest_Defense.png"
+    },
+    "061": {
+      "name": "Binoculars",
+      "type": "Tactical",
+      "rarity": "Rare",
+      "image": "061_Binoculars_Tactical.png"
+    },
+    "062": {
+      "name": "Rangefinder",
+      "type": "Tactical",
+      "rarity": "Common",
+      "image": "062_Rangefinder_Tactical.png"
+    },
+    "063": {
+      "name": "Handheld Transceiver",
+      "type": "Tactical",
+      "rarity": "Common",
+      "image": "063_HandheldTransceiver_Tactical.png"
+    },
+    "064": {
+      "name": "Compass",
+      "type": "Tactical",
+      "rarity": "Rare",
+      "image": "064_Compass_Tactical.png"
+    },
+    "065": {
+      "name": "Map",
+      "type": "Tactical",
+      "rarity": "Rare",
+      "image": "065_Map_Tactical.png"
+    },
+    "066": {
+      "name": "Headtorch",
+      "type": "Tactical",
+      "rarity": "Rare",
+      "image": "066_Headtorch_Tactical.png"
+    },
+    "067": {
+      "name": "Night Vision Goggles",
+      "type": "Tactical",
+      "rarity": "Common",
+      "image": "067_NightVisionGoggles_Tactical.png"
+    },
+    "068": {
+      "name": "Tripwire",
+      "type": "Tactical",
+      "rarity": "Uncommon",
+      "image": "068_TripWire_Tactical.png"
+    },
+    "069": {
+      "name": "Duct Tape",
+      "type": "Tactical",
+      "rarity": "Rare",
+      "image": "069_DuctTape_Tactical.png"
+    },
+    "070": {
+      "name": "Megaphone",
+      "type": "Tactical",
+      "rarity": "Common",
+      "image": "070_Megaphone_Tactical.png"
+    },
+    "071": {
+      "name": "Walkie Talkie",
+      "type": "Tactical",
+      "rarity": "Common",
+      "image": "071_WalkieTalkie_Tactical.png"
+    },
+    "072": {
+      "name": "Flashlight",
+      "type": "Tactical",
+      "rarity": "Common",
+      "image": "072_Flashlight_Tactical.png"
+    },
+    "073": {
+      "name": "Glow Stick",
+      "type": "Tactical",
+      "rarity": "Rare",
+      "image": "073_GlowStick_Tactical.png"
+    },
+    "074": {
+      "name": "Hunting Scope",
+      "type": "Tactical",
+      "rarity": "Uncommon",
+      "image": "074_HuntingScope_Tactical.png"
+    },
+    "075": {
+      "name": "Weapon Cleaning Kit",
+      "type": "Tactical",
+      "rarity": "Rare",
+      "image": "075_WeaponCleaningKit_Tactical.png"
+    },
+    "076": {
+      "name": "Can of Tactical Bacon",
+      "type": "Loot",
+      "rarity": "Rare",
+      "image": "076_CanofTacticalBacon_Loot.png"
+    },
+    "077": {
+      "name": "MRE",
+      "type": "Loot",
+      "rarity": "Common",
+      "image": "077_MRE_Loot.png"
+    },
+    "078": {
+      "name": "Canteen",
+      "type": "Loot",
+      "rarity": "Common",
+      "image": "078_Canteen_Loot.png"
+    },
+    "079": {
+      "name": "Box of Nails",
+      "type": "Loot",
+      "rarity": "Rare",
+      "image": "079_BoxofNails_Loot.png"
+    },
+    "080": {
+      "name": "Jerry Can",
+      "type": "Loot",
+      "rarity": "Common",
+      "image": "080_JerryCan_Loot.png"
+    },
+    "081": {
+      "name": "Dynamite",
+      "type": "Loot",
+      "rarity": "Rare",
+      "image": "081_Dynamite_Loot.png"
+    },
+    "082": {
+      "name": "First Aid Kit",
+      "type": "Loot",
+      "rarity": "Common",
+      "image": "082_FirstAidKit_Loot.png"
+    },
+    "083": {
+      "name": "Box of Ammo",
+      "type": "Loot",
+      "rarity": "Common",
+      "image": "083_BoxofAmmo_Loot.png"
+    },
+    "084": {
+      "name": "Fishing Rod",
+      "type": "Loot",
+      "rarity": "Rare",
+      "image": "084_FishingRod_Loot.png"
+    },
+    "085": {
+      "name": "Lockpick",
+      "type": "Loot",
+      "rarity": "Common",
+      "image": "085_Lockpick_Loot.png"
+    },
+    "086": {
+      "name": "Battery",
+      "type": "Loot",
+      "rarity": "Common",
+      "image": "086_Battery_Loot.png"
+    },
+    "087": {
+      "name": "Rope",
+      "type": "Loot",
+      "rarity": "Common",
+      "image": "087_Rope_Loot.png"
+    },
+    "088": {
+      "name": "Cooking Pot",
+      "type": "Loot",
+      "rarity": "Common",
+      "image": "088_CookingPot_Loot.png"
+    },
+    "089": {
+      "name": "Sewing Kit",
+      "type": "Loot",
+      "rarity": "Rare",
+      "image": "089_SewingKit_Loot.png"
+    },
+    "090": {
+      "name": "Gun Cleaning Kit",
+      "type": "Loot",
+      "rarity": "Rare",
+      "image": "090_GunCleaningKit_Loot.png"
+    },
+    "091": {
+      "name": "Walker (Civilian)",
+      "type": "Infected",
+      "rarity": "Uncommon",
+      "image": "091_Walker(Civilian)_Infected.png"
+    },
+    "092": {
+      "name": "Runner (Military)",
+      "type": "Infected",
+      "rarity": "Rare",
+      "image": "092_Runner(Military)_Infected.png"
+    },
+    "093": {
+      "name": "Crawler",
+      "type": "Infected",
+      "rarity": "Uncommon",
+      "image": "093_Crawler_Infected.png"
+    },
+    "094": {
+      "name": "Burnt Infected",
+      "type": "Infected",
+      "rarity": "Common",
+      "image": "094_BurntInfected_Infected.png"
+    },
+    "095": {
+      "name": "Police Infected",
+      "type": "Infected",
+      "rarity": "Common",
+      "image": "095_PoliceInfected_Infected.png"
+    },
+    "096": {
+      "name": "Hazmat Infected",
+      "type": "Infected",
+      "rarity": "Uncommon",
+      "image": "096_HazmatInfected_Infected.png"
+    },
+    "097": {
+      "name": "Doctor Infected",
+      "type": "Infected",
+      "rarity": "Uncommon",
+      "image": "097_DoctorInfected_Infected.png"
+    },
+    "098": {
+      "name": "Hunter Infected",
+      "type": "Infected",
+      "rarity": "Uncommon",
+      "image": "098_HunterInfected_Infected.png"
+    },
+    "099": {
+      "name": "Survivor Infected",
+      "type": "Infected",
+      "rarity": "Uncommon",
+      "image": "099_SurvivorInfected_Infected.png"
+    },
+    "100": {
+      "name": "Prisoner Infected",
+      "type": "Infected",
+      "rarity": "Uncommon",
+      "image": "100_PrisonerInfected_Infected.png"
+    },
+    "101": {
+      "name": "Spitter (Mutated)",
+      "type": "Infected",
+      "rarity": "Rare",
+      "image": "101_Spitter(Mutated)_Infected.png"
+    },
+    "102": {
+      "name": "Bloater",
+      "type": "Infected",
+      "rarity": "Uncommon",
+      "image": "102_Bloater_Infected.png"
+    },
+    "103": {
+      "name": "Fast Infected",
+      "type": "Infected",
+      "rarity": "Uncommon",
+      "image": "103_FastInfected_Infected.png"
+    },
+    "104": {
+      "name": "Butcher Infected",
+      "type": "Infected",
+      "rarity": "Common",
+      "image": "104_ButcherInfected_Infected.png"
+    },
+    "105": {
+      "name": "Behemoth",
+      "type": "Infected",
+      "rarity": "Rare",
+      "image": "105_Behemoth_Infected.png"
+    },
+    "106": {
+      "name": "Bear Trap",
+      "type": "Trap",
+      "rarity": "Common",
+      "image": "106_BearTrap_Trap.png"
+    },
+    "107": {
+      "name": "Tripwire Trap",
+      "type": "Trap",
+      "rarity": "Uncommon",
+      "image": "107_TripwireTrap_Trap.png"
+    },
+    "108": {
+      "name": "Landmine",
+      "type": "Trap",
+      "rarity": "Rare",
+      "image": "108_Landmine_Trap.png"
+    },
+    "109": {
+      "name": "Makeshift Charge",
+      "type": "Trap",
+      "rarity": "Uncommon",
+      "image": "109_MakeshiftCharge_Trap.png"
+    },
+    "110": {
+      "name": "Perimeter Trap",
+      "type": "Trap",
+      "rarity": "Common",
+      "image": "110_PerimeterTrap_Trap.png"
+    },
+    "111": {
+      "name": "Fire Barrel Trap",
+      "type": "Trap",
+      "rarity": "Rare",
+      "image": "111_FireBarrelTrap_Trap.png"
+    },
+    "112": {
+      "name": "Wire Snare",
+      "type": "Trap",
+      "rarity": "Uncommon",
+      "image": "112_WireSnare_Trap.png"
+    },
+    "113": {
+      "name": "Spiked Log Trap",
+      "type": "Trap",
+      "rarity": "Common",
+      "image": "113_SpikedLogTrap_Trap.png"
+    },
+    "114": {
+      "name": "Explosive Grenade Trap",
+      "type": "Trap",
+      "rarity": "Common",
+      "image": "114_ExplosiveGrenadeTrap_Trap.png"
+    },
+    "115": {
+      "name": "Gas Canister Trap",
+      "type": "Trap",
+      "rarity": "Uncommon",
+      "image": "115_GasCanisterTrap_Trap.png"
+    },
+    "116": {
+      "name": "Flare Distraction",
+      "type": "Trap",
+      "rarity": "Rare",
+      "image": "116_FlareDistraction_Trap.png"
+    },
+    "117": {
+      "name": "Alarm Tripwire",
+      "type": "Trap",
+      "rarity": "Common",
+      "image": "117_AlarmTripWire_Trap.png"
+    },
+    "118": {
+      "name": "Springloaded Breach Trap",
+      "type": "Trap",
+      "rarity": "Uncommon",
+      "image": "118_SpringloadedBreachTrap_Trap.png"
+    },
+    "119": {
+      "name": "IED Pressure Plate",
+      "type": "Trap",
+      "rarity": "Common",
+      "image": "119_IEDPressurePlate_Trap.png"
+    },
+    "120": {
+      "name": "Swinging Spiked Bat",
+      "type": "Trap",
+      "rarity": "Uncommon",
+      "image": "120_SwingingSpikedBat_Trap.png"
+    },
+    "121": {
+      "name": "The Agency",
+      "type": "Specialty",
+      "rarity": "Legendary",
+      "image": "121_TheAgency_Specialty.png"
+    },
+    "122": {
+      "name": "The Trader",
+      "type": "Specialty",
+      "rarity": "Legendary",
+      "image": "122_TheTrader_Specialty.png"
+    },
+    "123": {
+      "name": "Jakub Nowak",
+      "type": "Specialty",
+      "rarity": "Legendary",
+      "image": "123_JakubNowak_Specialty.png"
+    },
+    "124": {
+      "name": "Dr. Wesker",
+      "type": "Specialty",
+      "rarity": "Legendary",
+      "image": "124_Dr.Wesker_Specialty.png"
+    },
+    "125": {
+      "name": "Elena Kovak",
+      "type": "Specialty",
+      "rarity": "Legendary",
+      "image": "125_ElenaKovak_Specialty.png"
+    },
+    "126": {
+      "name": "Lt. Col. Emil Boren",
+      "type": "Specialty",
+      "rarity": "Legendary",
+      "image": "126_Lt.Col.EmilBoren_Specialty.png"
+    },
+    "127": {
+      "name": "Isabelle Laurent",
+      "type": "Specialty",
+      "rarity": "Legendary",
+      "image": "127_IsabelleLaurent_Specialty.png"
+    }
+  }
+}
