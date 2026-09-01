@@ -1,443 +1,331 @@
-/* Background Styling */
+:root {
+  color-scheme: dark;
+  font-family: Arial, sans-serif;
+}
+
+* { box-sizing: border-box; }
+
+html, body { min-height: 100%; }
+
 body {
   margin: 0;
-  padding: 0;
-  font-family: 'Arial', sans-serif;
-  background: url('../images/backgrounds/background_image.PNG') no-repeat center center fixed;
+  color: #fff;
+  background: #071012 url('../images/backgrounds/background_image.PNG') no-repeat center center fixed;
   background-size: cover;
-  color: white;
 }
 
 #background {
-  position: absolute;
-  width: 100%;
-  height: 100%;
+  position: fixed;
+  inset: 0;
   z-index: -1;
-  filter: brightness(0.6);
+  background: rgba(0, 0, 0, .44);
+  pointer-events: none;
 }
 
-/* ──────────────────────────────────────────────────────────
-   NEW: Page layout (main + right chat panel)
-   ────────────────────────────────────────────────────────── */
 .page {
   display: grid;
-  grid-template-columns: 1fr minmax(320px, 28%);
+  grid-template-columns: minmax(0, 1fr) minmax(300px, 28%);
   gap: 16px;
   align-items: start;
-  padding: 0 12px;
-}
-#spectator-main { min-width: 0; }   /* allow content to shrink nicely */
-#chat-panel     { min-width: 0; }
-
-/* Collapse to single column on smaller screens */
-@media (max-width: 980px) {
-  .page { grid-template-columns: 1fr; }
-  #chat-panel { order: 3; }
+  padding: 12px;
 }
 
-/* Spectator Header */
+#spectator-main, #chat-panel { min-width: 0; }
+
 .spectator-header {
   text-align: center;
-  margin: 20px;
+  margin: 16px 12px 8px;
 }
 
 .spectator-header h1 {
-  font-size: 36px;
-  text-shadow: 0 0 10px rgba(255,255,255,0.8);
+  margin: 0 0 10px;
+  font-size: clamp(30px, 4vw, 44px);
+  text-shadow: 0 0 10px rgba(255,255,255,.75);
 }
 
-.spectator-header p {
+.spectator-header p { margin: 6px 0; color: #cfd8dc; }
+
+.status {
+  width: min(680px, 96%);
+  margin-inline: auto !important;
+  padding: 10px 14px;
+  border: 1px solid #566;
+  border-radius: 10px;
+  background: rgba(0,0,0,.56);
+}
+.status--live { border-color: #00e6a8; color: #dffff6 !important; }
+.status--loading { border-color: #67a7c2; }
+.status--warning { border-color: #d9ad4a; color: #ffe7ad !important; }
+.status--error { border-color: #ef5b70; color: #ffd2d9 !important; }
+.status--finished { border-color: #00ffff; color: #cfffff !important; }
+
+.turn-display {
+  min-height: 28px;
+  margin: 10px 0;
+  text-align: center;
   font-size: 18px;
-  color: #ccc;
+  font-weight: 700;
 }
 
-/* Duel Layout */
 .duel-container {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 60px;
-  padding: 40px 10px;
+  gap: 28px;
+  padding: 12px 6px 88px;
 }
 
 .player {
-  width: 90%;
-  max-width: 900px;
-  padding: 20px;
-  background: rgba(0,0,0,0.6);
-  border: 2px solid #555;
-  border-radius: 8px;
-  transition: border-color 0.3s ease, box-shadow 0.3s ease;
+  width: min(96%, 920px);
+  padding: 18px;
+  background: rgba(0,0,0,.68);
+  border: 2px solid #566269;
+  border-radius: 12px;
+  transition: border-color .2s ease, box-shadow .2s ease;
 }
-
 .player.active {
   border-color: #00ffff;
-  box-shadow: 0 0 12px #00ffff;
+  box-shadow: 0 0 14px rgba(0,255,255,.55);
 }
-
 .player h2 {
-  margin-top: 0;
-  font-size: 24px;
-  border-bottom: 1px solid #999;
+  margin: 0 0 10px;
   padding-bottom: 10px;
+  border-bottom: 1px solid #7b858b;
   text-align: center;
+  font-size: 24px;
 }
+.hp { text-align: center; font-size: 18px; font-weight: 700; }
+.piles { margin: 8px 0 12px; text-align: center; color: #cfe9ff; font-size: 13px; }
 
-.hp {
-  font-size: 18px;
-  margin-bottom: 10px;
-  text-align: center;
-}
-
-/* Deck & Discard Counters */
-.piles {
-  margin: 6px 0 10px;
-  color: #cfe9ff;
-  font-size: 13px;
-  opacity: 0.9;
-  text-align: center;
-}
-.piles strong {
-  font-weight: 700;
-}
-
-/* Field & Hand */
 .field, .hand {
   display: flex;
   justify-content: center;
-  gap: 10px;
+  align-items: center;
   flex-wrap: wrap;
+  gap: 10px;
+  min-height: 154px;
   margin: 10px 0;
 }
+.field { border-bottom: 1px solid rgba(255,255,255,.08); padding-bottom: 10px; }
+.hand { opacity: .92; }
 
-/* Card Layout */
 .card {
+  position: relative;
+  flex: 0 0 auto;
   width: 100px;
   height: 140px;
-  background: #222;
-  border: 1px solid #999;
-  border-radius: 5px;
   overflow: hidden;
+  background: #111;
+  border: 1px solid #8c969b;
+  border-radius: 6px;
   text-align: center;
-  flex: 0 0 auto;
-  position: relative;
-  transition: transform 0.2s ease, box-shadow 0.2s ease;
+  box-shadow: 0 2px 8px rgba(0,0,0,.4);
 }
-
 .card img {
+  display: block;
   width: 100%;
-  height: auto;
-  border-radius: 3px;
+  height: 100%;
+  object-fit: cover;
 }
-
 .card-name {
-  font-size: 12px;
-  padding: 5px;
-  background-color: rgba(0,0,0,0.7);
   position: absolute;
-  bottom: 0;
   left: 0;
-  width: 100%;
+  right: 0;
+  bottom: 0;
+  padding: 5px 4px;
+  font-size: 11px;
+  line-height: 1.15;
+  background: rgba(0,0,0,.78);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
+.card.face-down { border-style: dashed; border-color: #61727a; }
+.card:hover { transform: scale(1.04); box-shadow: 0 0 12px rgba(0,255,255,.45); }
 
-/* Face-down backs (used for traps/unrevealed cards) */
-.card.face-down {
-  filter: grayscale(100%);
-  opacity: 0.85;
-  border: 2px dashed #555;
-}
-
-/* Hover effect for cards */
-.card:hover {
-  transform: scale(1.05);
-  box-shadow: 0 0 12px rgba(0,255,255,0.6);
-}
-
-/* Optional: Highlight practice duels visually */
-.practice-mode .spectator-header h1 {
-  color: #00ffff;
+body.practice-mode .spectator-header h1 {
+  color: #cfffff;
   text-shadow: 0 0 15px #00ffff;
 }
+body.practice-mode { border-top: 4px solid #00ffff; }
 
-.practice-mode body {
-  border-top: 4px solid #00ffff;
-}
-
-/* 🔊 Audio toggle styling */
-.audio-toggle {
-  position: fixed;
-  right: 16px;
-  bottom: 16px;
-  z-index: 9999;
-  background: rgba(0,0,0,0.65);
-  color: #fff;
-  border: 1px solid #00ffff;
-  border-radius: 999px;
-  padding: 8px 12px;
-  font-size: 12px;
-  cursor: pointer;
-  user-select: none;
-  backdrop-filter: blur(2px);
-  transition: box-shadow 0.2s ease;
-  /* ensure nothing blocks clicks */
-  pointer-events: auto;
-}
-
-.audio-toggle:hover {
-  box-shadow: 0 0 10px #00ffff;
-}
-
-/* ──────────────────────────────────────────────────────────
-   NEW: Spectator Chat panel styling
-   ────────────────────────────────────────────────────────── */
 #chat-panel {
-  background: rgba(0,0,0,0.55);
-  border: 1px solid #00ffff66;
-  border-radius: 12px;
-  backdrop-filter: blur(4px);
+  position: sticky;
+  top: 12px;
+  z-index: 10;
   display: flex;
   flex-direction: column;
-  min-height: 420px;
-  max-height: calc(100vh - 160px);
-  position: sticky;        /* keep visible while scrolling */
-  top: 20px;
+  min-height: 460px;
+  max-height: calc(100vh - 24px);
   overflow: hidden;
-
-  /* ⬆ ensure it’s above any global overlay layers (e.g., snowfall, canvases) */
-  z-index: 6;
+  background: rgba(0,0,0,.72);
+  border: 1px solid rgba(0,255,255,.42);
+  border-radius: 12px;
+  backdrop-filter: blur(5px);
 }
-/* keep chat usable even if other overlays exist */
 #chat-panel, #chat-panel * { pointer-events: auto; }
 
 .chat-header {
-  display: flex; justify-content: space-between; align-items: center;
-  padding: 10px 12px; border-bottom: 1px solid #00ffff22;
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  align-items: center;
+  padding: 11px 12px;
+  border-bottom: 1px solid rgba(0,255,255,.16);
 }
-.chat-title { font-weight: 700; color: #8ff; letter-spacing: 0.5px; }
-.chat-presence { font-size: 12px; opacity: 0.85; color: #cfe9ff; }
+.chat-title { font-weight: 800; color: #9ff; }
+.chat-identity { margin-top: 3px; font-size: 11px; color: #9cb2bd; }
+.chat-presence { font-size: 12px; color: #cfe9ff; white-space: nowrap; }
 
 .chat-log {
-  padding: 10px;
-  overflow-y: auto;
   flex: 1;
+  overflow-y: auto;
+  padding: 10px;
   scrollbar-width: thin;
-  scrollbar-color: #00ffff55 transparent;
+  scrollbar-color: rgba(0,255,255,.35) transparent;
 }
-.chat-log::-webkit-scrollbar { width: 8px; }
-.chat-log::-webkit-scrollbar-thumb { background: #00ffff55; border-radius: 8px; }
-
-.chat-row { margin-bottom: 8px; display: flex; }
+.chat-row { display: flex; margin-bottom: 8px; }
 .chat-row.me { justify-content: flex-end; }
-
 .chat-bubble {
   max-width: 88%;
-  background: rgba(10,20,25,0.75);
-  border: 1px solid #00ffff22;
-  border-radius: 10px;
   padding: 8px 10px;
-  box-shadow: 0 0 8px rgba(0,255,255,0.06);
+  background: rgba(10,20,25,.82);
+  border: 1px solid rgba(0,255,255,.16);
+  border-radius: 10px;
+  word-break: break-word;
 }
-.chat-row.me .chat-bubble { background: rgba(0,60,70,0.75); border-color: #00ffff55; }
-
-.chat-meta { font-size: 11px; opacity: 0.9; display:flex; gap:8px; }
-.chat-name { color: #bfe; }
+.chat-row.me .chat-bubble { background: rgba(0,60,70,.82); border-color: rgba(0,255,255,.4); }
+.chat-meta { display: flex; gap: 8px; font-size: 11px; }
+.chat-name { color: #bfe; font-weight: 700; }
 .chat-time { color: #9ad; }
-.chat-text { margin-top: 2px; line-height: 1.35; }
-
-.chat-typing { min-height: 18px; padding: 0 12px 6px; font-size: 12px; color: #9ad; }
-
+.chat-text { margin-top: 3px; line-height: 1.35; }
+.chat-typing { min-height: 22px; padding: 2px 12px 6px; font-size: 12px; color: #9ad; }
 .chat-form {
-  display:flex; gap:8px; padding: 8px; border-top: 1px solid #00ffff22;
-  background: rgba(0,0,0,0.42);
-
-  /* keep the composer reachable when panel is tall */
-  position: sticky;
-  bottom: 0;
+  display: flex;
+  gap: 8px;
+  padding: 8px;
+  border-top: 1px solid rgba(0,255,255,.16);
+  background: rgba(0,0,0,.5);
 }
 #chat-input {
-  flex: 1; background: rgba(0,0,0,0.35); border: 1px solid #00ffff22; color: #e8fafe;
-  padding: 8px 10px; border-radius: 8px; outline: none;
+  flex: 1;
+  min-width: 0;
+  padding: 9px 10px;
+  color: #eefcff;
+  background: rgba(0,0,0,.5);
+  border: 1px solid rgba(0,255,255,.25);
+  border-radius: 8px;
+  outline: none;
 }
-#chat-input:focus { border-color: #00ffff88; box-shadow: 0 0 8px #00ffff33; }
+#chat-input:focus { border-color: rgba(0,255,255,.7); box-shadow: 0 0 8px rgba(0,255,255,.16); }
 #chat-send {
-  padding: 8px 12px; border-radius: 8px; border: 1px solid #00ffff55; background: rgba(0,50,60,0.7); color:#bff;
+  padding: 9px 13px;
+  border: 1px solid rgba(0,255,255,.48);
+  border-radius: 8px;
+  color: #bff;
+  background: rgba(0,60,70,.78);
   cursor: pointer;
 }
-#chat-send:hover { box-shadow: 0 0 10px #00ffff44; }
-/* visual state when the client disables send briefly */
-#chat-send[disabled] { opacity: .6; cursor: not-allowed; }
+#chat-send:disabled { opacity: .55; cursor: not-allowed; }
 
-/* Return to Hub button */
-.hub-btn{
+.audio-toggle, .hub-btn {
   position: fixed;
   right: 16px;
-  bottom: 70px; /* sits above the audio button */
-  z-index: 9999;
-  background: rgba(0,40,50,0.85);
-  color: #bff;
-  border: 1px solid #00ffff66;
-  border-radius: 10px;
-  padding: 10px 14px;
+  z-index: 10020;
+  border: 1px solid rgba(0,255,255,.55);
+  color: #dfffff;
+  background: rgba(0,25,32,.9);
+  backdrop-filter: blur(4px);
   text-decoration: none;
-  font-weight: 600;
-  backdrop-filter: blur(3px);
+  cursor: pointer;
 }
-.hub-btn:hover{ box-shadow: 0 0 10px #00ffff55; }
+.audio-toggle {
+  bottom: 16px;
+  min-width: 44px;
+  min-height: 44px;
+  border-radius: 999px;
+}
+.hub-btn {
+  bottom: 70px;
+  padding: 10px 14px;
+  border-radius: 10px;
+  font-weight: 700;
+}
+.audio-toggle:hover, .hub-btn:hover, #chat-send:hover { box-shadow: 0 0 10px rgba(0,255,255,.45); }
 
-/* ──────────────────────────────────────────────────────────
-   NEW: Blue flash/highlight utilities
-   ────────────────────────────────────────────────────────── */
 .highlight-blue { color: #00ffff !important; text-shadow: 0 0 12px #00ffff; }
-
-@keyframes pulseBlue {
-  0% { box-shadow: 0 0 0 rgba(0,255,255,0); }
-  50% { box-shadow: 0 0 18px rgba(0,255,255,0.9); }
-  100% { box-shadow: 0 0 0 rgba(0,255,255,0); }
-}
-.flash-blue { animation: pulseBlue 1s ease-out 0s 3; }
-
-/* ──────────────────────────────────────────────────────────
-   NEW: Join toast banner
-   ────────────────────────────────────────────────────────── */
 .join-toast {
   position: fixed;
   top: 12px;
   left: 50%;
-  transform: translateX(-50%);
-  background: rgba(0,30,40,0.92);
-  color: #bff;
-  border: 1px solid #00ffff66;
-  border-radius: 12px;
-  padding: 10px 16px;
-  z-index: 10000;
-  backdrop-filter: blur(3px);
-  white-space: nowrap;
-  pointer-events: none;
+  z-index: 10040;
+  transform: translate(-50%, -10px);
   opacity: 0;
+  padding: 10px 16px;
+  white-space: nowrap;
+  color: #bff;
+  background: rgba(0,30,40,.94);
+  border: 1px solid rgba(0,255,255,.5);
+  border-radius: 12px;
+  pointer-events: none;
+  transition: opacity .18s ease, transform .18s ease;
 }
-.join-toast.show {
-  opacity: 1;
-  animation: toastSlide 300ms ease-out, toastPulse 1.2s ease-in-out 0s 8;
-}
-@keyframes toastSlide {
-  from { opacity: 0; transform: translate(-50%, -10px); }
-  to   { opacity: 1; transform: translate(-50%, 0); }
-}
-@keyframes toastPulse {
-  0%,100% { text-shadow: 0 0 0 #00ffff; }
-  50%     { text-shadow: 0 0 16px #00ffff; }
-}
+.join-toast.show { opacity: 1; transform: translate(-50%, 0); }
 
-/* ──────────────────────────────────────────────────────────
-   NEW: Duel result modal
-   ────────────────────────────────────────────────────────── */
 .duel-result {
   position: fixed;
   inset: 0;
-  background: rgba(0,0,0,0.55);
-  backdrop-filter: blur(3px);
-  z-index: 10010;
+  z-index: 10030;
   display: grid;
   place-items: center;
+  padding: 18px;
+  background: rgba(0,0,0,.68);
+  backdrop-filter: blur(3px);
   opacity: 0;
-  transition: opacity .2s ease;
+  pointer-events: none;
+  transition: opacity .18s ease;
 }
-/* Ensure the end-of-duel modal always accepts clicks */
-.duel-result { pointer-events: auto; }
-.duel-result.show { opacity: 1; }
-
+.duel-result.show { opacity: 1; pointer-events: auto; }
 .duel-result__card {
   width: min(92vw, 520px);
-  background: rgba(0,30,40,0.95);
-  border: 1px solid #00ffff66;
-  border-radius: 14px;
-  padding: 18px 20px;
-  box-shadow: 0 0 18px rgba(0,255,255,0.25);
-  color: #e8fafe;
+  padding: 20px;
   text-align: center;
+  color: #e8fafe;
+  background: rgba(0,30,40,.98);
+  border: 1px solid rgba(0,255,255,.5);
+  border-radius: 14px;
+  box-shadow: 0 0 20px rgba(0,255,255,.22);
 }
-/* Ensure the end-of-duel modal always accepts clicks */
-.duel-result__card { pointer-events: auto; }
-.duel-result__title  { font-size: 20px; font-weight: 800; color: #8ff; margin-bottom: 8px; }
-.duel-result__winner { font-size: 18px; margin: 6px 0; text-shadow: 0 0 10px #00ffff; }
-.duel-result__reason { font-size: 14px; opacity: .9; color: #cfe9ff; }
-.duel-result__close  {
-  margin-top: 14px;
-  padding: 8px 12px;
-  border-radius: 10px;
-  border: 1px solid #00ffff55;
-  background: rgba(0,50,60,0.7);
+.duel-result__title { color: #8ff; font-size: 21px; font-weight: 800; }
+.duel-result__winner { margin: 10px 0 6px; font-size: 19px; font-weight: 800; }
+.duel-result__reason { color: #cfe9ff; }
+.duel-result__close {
+  margin-top: 16px;
+  padding: 9px 14px;
+  border: 1px solid rgba(0,255,255,.45);
+  border-radius: 9px;
   color: #bff;
+  background: rgba(0,60,70,.75);
   cursor: pointer;
 }
-/* Ensure the end-of-duel modal always accepts clicks */
-.duel-result__close { pointer-events: auto; cursor: pointer; }
-.duel-result__close:hover { box-shadow: 0 0 10px #00ffff44; }
 
-/* Responsive tweaks */
-@media (max-width: 768px) {
-  .player {
-    width: 95%;
-    padding: 15px;
-  }
-  .card {
-    width: 80px;
-    height: 112px;
-  }
-  .spectator-header h1 {
-    font-size: 28px;
-  }
-  /* Chat fills full width beneath main content on mobile */
-  #chat-panel {
-    position: relative;
-    max-height: none;
-  }
-
-  /* BIGGER send button on mobile */
-  #chat-send {
-    padding: 12px 16px;
-    font-size: 16px;
-    border-width: 2px;
-  }
-
-  /* Larger mute button hit area on mobile */
-  .audio-toggle {
-    padding: 12px 16px;
-    font-size: 16px;
-    min-width: 48px;
-    min-height: 48px;
-    touch-action: manipulation;
-  }
+@media (max-width: 980px) {
+  .page { grid-template-columns: 1fr; }
+  #chat-panel { position: relative; top: auto; max-height: 560px; order: 3; }
 }
 
-/* === CLICK-THROUGH SAFETY NET (add at end of CSS) === */
-
-/* Kill click-eating overlays by default */
-.snowfall,
-#coinFlipContainer,
-.animation,
-.overlay {
-  pointer-events: none !important;
+@media (max-width: 620px) {
+  .page { padding: 6px; }
+  .player { width: 100%; padding: 12px 8px; }
+  .duel-container { gap: 18px; padding-inline: 0; }
+  .field, .hand { gap: 6px; min-height: 118px; }
+  .card { width: 76px; height: 106px; }
+  .card-name { font-size: 9px; }
+  .hub-btn { left: 10px; right: auto; bottom: 12px; }
+  .audio-toggle { right: 10px; bottom: 10px; }
+  #chat-send { min-height: 44px; }
 }
 
-/* Chat / hub / audio must always be interactive */
-#chat-panel,
-#chat-panel *,
-.hub-btn,
-.return-to-hub,
-.audio-toggle {
-  pointer-events: auto !important;
-  z-index: 10020; /* above generic overlays */
-}
-
-/* End-of-duel modal: only accept clicks when visible */
-.duel-result        { pointer-events: none !important; }
-.duel-result.show   { pointer-events: auto !important; z-index: 10030; }
-.duel-result__card,
-.duel-result__close { pointer-events: auto !important; cursor: pointer; }
-
-/* Announcement / toasts should never block clicks */
-#announcement,
-.join-toast {
-  pointer-events: none !important;
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { scroll-behavior: auto !important; transition: none !important; animation: none !important; }
 }
