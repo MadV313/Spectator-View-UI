@@ -1,0 +1,9 @@
+{
+  "name": "sv13-spectator-view-ui",
+  "version": "9.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "node --test test/repo9-contract.test.mjs"
+  }
+}
