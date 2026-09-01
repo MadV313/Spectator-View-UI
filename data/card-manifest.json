@@ -1,12 +1,12 @@
 {
-  "version": 1,
-  "source": "Duel-Bot logic/CoreMasterReference.json",
+  "version": 2,
+  "source": "Duel-Bot logic/CoreMasterReference.json + verified Collection UI card assets",
   "cards": {
     "000": {
       "name": "WinterLand Death Deck (Face-Down)",
       "type": "Unique",
       "rarity": "Unique",
-      "image": "000_WinterlandDeathDeck_Back.png"
+      "image": "000_CardBack_Unique.png"
     },
     "001": {
       "name": "M4-A1",
@@ -770,5 +770,7 @@
       "rarity": "Legendary",
       "image": "127_IsabelleLaurent_Specialty.png"
     }
-  }
+  },
+  "assetBase": "https://collection.sv13tcg.com/images/cards",
+  "cardBack": "000_CardBack_Unique.png"
 }
