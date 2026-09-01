@@ -1,709 +1,465 @@
-// spectator view UI /scripts/spectatorview.js
-(function () {
-  // -------- helpers --------
-  const stripTrailingSlashes = (s) => (s || '').replace(/\/+$/, '');
-  const stripApiSuffix = (s) => stripTrailingSlashes(s || '').replace(/\/api$/i, '');
-  const toQS = (obj) =>
-    Object.entries(obj)
-      .filter(([, v]) => v != null && v !== '')
-      .map(([k, v]) => `${encodeURIComponent(k)}=${encodeURIComponent(v)}`)
-      .join('&');
-
-  // Merge params from ?search and #hash (search wins)
-  function readUrlParams() {
-    const search = new URLSearchParams(location.search);
-    const hashRaw = (location.hash || '').replace(/^#/, '');
-    const hash = new URLSearchParams(hashRaw);
-    const get = (k) => {
-      const v = (search.get(k) ?? '').trim();
-      if (v) return v;
-      const hv = (hash.get(k) ?? '').trim();
-      return hv;
-    };
-    return {
-      mode: (get('mode') || 'duel').toLowerCase(),
-      session: get('session') || get('duelId') || '',
-      user: get('user') || '',
-      token: get('token') || '',
-      api: (get('api') || '').replace(/\/+$/, ''),
-      me: (get('me') || '').replace(/\/+$/, ''),
-      imgbase: (get('imgbase') || '').replace(/\/+$/, ''),
-      hub: get('hub') || '' // base URL to return to Hub
-    };
-  }
-
-  const params = readUrlParams();
-
-  // ---- IDs / params ----
-  const mode = params.mode;
-  const sessionId = params.session;
-  const userName = params.user;
-
-  // Token & API base (normalize API_BASE to always include /api)
-  const TOKEN = (window.PLAYER_TOKEN || params.token || '').trim();
-  const rawApiParam = params.api; // may be root or already /api
-  const rawApi = (window.API_BASE || rawApiParam || '/api').replace(/\/+$/, '');
-  const API_BASE = rawApi.endsWith('/api') ? rawApi : `${rawApi}/api`;
-
-  // Derive ME base: prefer explicit ?me=, else root of API
-  const ME_BASE = stripTrailingSlashes(params.me || stripApiSuffix(API_BASE));
-
-  // Persist for Hub round-trips (HUB-UI reads these keys)
-  try {
-    if (TOKEN) localStorage.setItem('sv13.token', TOKEN);
-    // Store API root (without /api) so Hub can pass correct bases forward
-    const apiRootForStorage = stripApiSuffix(API_BASE);
-    if (apiRootForStorage) localStorage.setItem('sv13.api', apiRootForStorage);
-    if (ME_BASE) localStorage.setItem('sv13.me', ME_BASE);
-  } catch {}
-
-  // Card images
-  const IMG_BASE = stripTrailingSlashes(params.imgbase || 'images/cards');
-  // Manifest (loaded on boot if present)
-  let CARD_MANIFEST = null;      // object map { "095": "095_Name_Attack.png", back?: "..." }
-  let MANIFEST_READY = false;
-  let BACK_OVERRIDE = null;      // string filename from manifest.back when present
-
-  // 🔒 Sticky names cache so later sparse payloads can’t revert to generic labels
-  const STICKY_NAMES = { player1: null, player2: null };
-
-  // URL name hints (optional)
-  const P1_HINT = (new URLSearchParams(location.search).get('p1') ||
-                  new URLSearchParams(location.search).get('player1') ||
-                  new URLSearchParams(location.search).get('p1name') ||
-                  userName || null);
-  const P2_HINT = (new URLSearchParams(location.search).get('p2') ||
-                  new URLSearchParams(location.search).get('player2') ||
-                  new URLSearchParams(location.search).get('p2name') || null);
-
-  // Fallback chain for card backs (prevents 404 spam). We’ll prepend manifest.back if available.
-  const STATIC_BACK_CHAIN = [
-    `${IMG_BASE}/000.png`,
-    `${IMG_BASE}/000_CardBack_Unique.png`,
-    `${IMG_BASE}/000_WinterlandDeathDeck_Back.png`
-  ];
-  function getBackChain() {
-    return BACK_OVERRIDE
-      ? [`${IMG_BASE}/${BACK_OVERRIDE}`, ...STATIC_BACK_CHAIN]
-      : STATIC_BACK_CHAIN.slice();
-  }
-
-  try { console.log('[Spectator] API_BASE =', API_BASE, 'IMG_BASE =', IMG_BASE, 'mode =', mode, 'ME_BASE =', ME_BASE); } catch {}
-
-  // ---- small helpers ----
-  const $ = (sel) => document.querySelector(sel);
-  const setText = (sel, txt) => { const el = $(sel); if (el) el.textContent = txt; };
-
-  function apiUrl(path) {
-    const p = path.startsWith('/') ? path : `/${path}`;
-    return `${API_BASE}${p}`;
-  }
-
-  // simple onerror fallback chain for <img>
-  function setImgWithFallbacks(img, urls) {
-    let i = 0;
-    const tryNext = () => {
-      if (i >= urls.length) return;
-      img.onerror = () => { i++; tryNext(); };
-      img.src = urls[i];
-    };
-    tryNext();
-  }
-
-  if (mode === 'practice') document.body.classList.add('practice-mode');
-
-  // ---- Music bootstrap (optional elements)
-  (function setupBgMusic() {
-    if (window.__SPEC_MUSIC_INIT__) return;
-    const audio = document.getElementById('spec-bgm');
-    const btn   = document.getElementById('specAudioToggle');
-    if (!audio || !btn) return;
-
-    window.__SPEC_MUSIC_INIT__ = true;
-    const STORE_KEY = 'sv13_spectator_bgm.muted';
-
-    try {
-      const stored = localStorage.getItem(STORE_KEY);
-      if (stored !== null) audio.muted = (stored === 'true');
-    } catch {}
-
-    function updateBtn() {
-      btn.textContent = audio.muted ? '🔇' : '🔊';
-      btn.setAttribute('aria-label', audio.muted ? 'Play background music' : 'Mute background music');
-    }
-    updateBtn();
-
-    audio.play().catch(() => {});
-
-    const opt = { passive: true };
-    const unlock = () => {
-      audio.play().catch(() => {});
-      try {
-        if (localStorage.getItem(STORE_KEY) !== 'true') {
-          audio.muted = false;
-          updateBtn();
-        }
-      } catch {}
-      window.removeEventListener('pointerdown', unlock, opt);
-      window.removeEventListener('keydown', unlock);
-      document.removeEventListener('visibilitychange', vis);
-    };
-    const vis = () => { if (!document.hidden) audio.play().catch(() => {}); };
-
-    window.addEventListener('pointerdown', unlock, opt);
-    window.addEventListener('keydown', unlock);
-    document.addEventListener('visibilitychange', vis);
-
-    const toggle = () => {
-      audio.muted = !audio.muted;
-      try { localStorage.setItem('STORE_KEY', String(audio.muted)); } catch {}
-      updateBtn();
-      audio.play().catch(() => {});
-    };
-    btn.addEventListener('click', toggle);
-    // Improve mobile reliability
-    btn.addEventListener('touchend', (e) => { e.preventDefault(); toggle(); }, { passive: false });
-
-    // ensure clickable even above overlays
-    try {
-      btn.style.pointerEvents = 'auto';
-      btn.style.zIndex = '10001';
-    } catch {}
-  })();
-
-  // ---- UI boot ----
-  if (userName) {
-    const msg = document.createElement('p');
-    msg.textContent = `@${userName} joined to watch the madness!`;
-    msg.style.fontStyle = 'italic';
-    msg.style.color = '#ccc';
-    msg.style.textAlign = 'center';
-    document.querySelector('.spectator-header')?.appendChild(msg);
-  }
-
-  if (mode !== 'practice' && !sessionId) {
-    setText('#spectator-status', '❌ Missing session id.');
-    console.error('[Spectator] No session id provided.');
-    return;
-  }
-
-  // ---- Return to Hub link rewrite (propagate token/api/me) ----
-  (function wireReturnToHub() {
-    const a = document.getElementById('return-to-hub');
-    if (!a) return;
-
-    // Prefer explicit ?hub=… base if provided; otherwise keep existing href or default HUB-UI path
-    let baseHref = params.hub || a.getAttribute('href') || a.href || 'https://madv313.github.io/HUB-UI/';
-
-    // Normalize base; if it's a full Hub URL that already has params, we’ll merge (search wins)
-    try {
-      const u = new URL(baseHref, location.href);
-      const existing = new URLSearchParams(u.search);
-      if (TOKEN)    existing.set('token', TOKEN);
-      const apiRoot = stripApiSuffix(API_BASE);
-      if (apiRoot)  existing.set('api', apiRoot);
-      if (ME_BASE)  existing.set('me', ME_BASE);
-      u.search = `?${existing.toString()}`;
-      a.href = u.toString();
-    } catch {
-      // Fallback string concat
-      const apiRoot = stripApiSuffix(API_BASE);
-      const qs = toQS({ token: TOKEN, api: apiRoot, me: ME_BASE });
-      const sep = baseHref.includes('?') ? '&' : '?';
-      a.href = qs ? `${baseHref}${sep}${qs}` : baseHref;
-    }
-  })();
-
-  // ---- Card id helpers ----
-  function to3(n) { return String(n).padStart(3, '0'); }
-
-  function extractNumericId(card) {
-    // Accept several shapes: number, "095", "095_Flashlight_Utility", "M4A1_Attack(001)"
-    if (!card) return null;
-
-    const direct = card.cardId ?? card.numericId ?? card.id ?? card.code ?? card.name;
-    if (direct == null) return null;
-
-    if (typeof direct === 'number') return to3(direct);
-
-    const s = String(direct);
-    const mLead = s.match(/^\D?(\d{1,3})\D/);
-    if (mLead) return to3(mLead[1]);
-
-    const mAny = s.match(/(\d{1,3})/);
-    if (mAny) return to3(mAny[1]);
-
-    return null;
-  }
-
-  // --- Trap detection (range-only; no manifest needed)
-  function isTrapIdByRange(id3) {
-    const n = Number(String(id3).replace(/\D/g, ''));
-    return Number.isFinite(n) && n >= 106 && n <= 120;
-  }
-
-  const FACEUP_SUFFIXES = [
-    '', '_Attack', '_Utility', '_Support', '_Trap', '_Defense',
-    '_Action', '_Item', '_Weapon', '_Armor', '_Vehicle', '_Supply', '_Unique'
-  ];
-
-  function makeFaceUpSrcCandidates(card) {
-    const id3 = extractNumericId(card);
-    if (!id3) return [];
-    if (CARD_MANIFEST && typeof CARD_MANIFEST[id3] === 'string' && CARD_MANIFEST[id3].trim()) {
-      return [`${IMG_BASE}/${CARD_MANIFEST[id3].trim()}`];
-    }
-    const list = FACEUP_SUFFIXES.map(s => `${IMG_BASE}/${id3}${s}.png`);
-    return list;
-  }
-
-  // ---- Rendering ----
-  // cache of last rendered counts to avoid unnecessary re-renders
-  const lastRenderCounts = { player1: {}, player2: {} };
-
-  function renderCard(card, forceFaceDown) {
-    const cardDiv = document.createElement('div');
-    cardDiv.classList.add('card');
-
-    const img  = document.createElement('img');
-    const name = document.createElement('div');
-    name.classList.add('card-name');
-
-    // If server sent explicit states, respect them; then enforce trap facedown unless _fired.
-    const id3    = extractNumericId(card);
-    const fired  = Boolean(card && card._fired);
-    const statedFaceDown = Boolean(card && card.isFaceDown);
-    const isTrap = isTrapIdByRange(id3);
-    const isFaceDown = Boolean(forceFaceDown || statedFaceDown || (isTrap && !fired));
-
-    if (isFaceDown) {
-      setImgWithFallbacks(img, getBackChain());
-      name.textContent = ''; // hide card id/name when facedown
-    } else {
-      const candidates = makeFaceUpSrcCandidates(card);
-      if (candidates.length) {
-        setImgWithFallbacks(img, candidates);
-        name.textContent = id3 || '';
-      } else {
-        setImgWithFallbacks(img, getBackChain());
-        name.textContent = '';
-      }
-    }
-
-    // helpful flags for debugging
-    cardDiv.dataset.cardId = id3 || '';
-    cardDiv.dataset.isTrap = String(!!isTrap);
-    cardDiv.dataset.fired  = String(!!fired);
-
-    cardDiv.appendChild(img);
-    cardDiv.appendChild(name);
-    return cardDiv;
-  }
-
-  function renderPlayer(playerKey, playerData) {
-    const playerDiv = document.getElementById(playerKey);
-    if (!playerDiv) return;
-
-    const hpEl   = playerDiv.querySelector('.hp');
-    const field  = playerDiv.querySelector('.field');
-    const hand   = playerDiv.querySelector('.hand');
-    const deckEl = playerDiv.querySelector('.piles .deck-count');
-    const discEl = playerDiv.querySelector('.piles .discard-count');
-
-    // skip re-render if counts unchanged
-    const key = playerKey;
-    const prev = lastRenderCounts[key];
-    const same =
-      prev.hp === playerData?.hp &&
-      prev.field === playerData?.field?.length &&
-      prev.hand === playerData?.handCount &&
-      prev.deck === playerData?.deckCount &&
-      prev.disc === playerData?.discardCount;
-    if (same) return;
-    lastRenderCounts[key] = {
-      hp: playerData?.hp,
-      field: playerData?.field?.length,
-      hand: playerData?.handCount,
-      deck: playerData?.deckCount,
-      disc: playerData?.discardCount
-    };
-
-    if (hpEl)   hpEl.textContent = `HP: ${playerData?.hp ?? 0}`;
-    if (deckEl) deckEl.textContent = String(playerData?.deckCount ?? 0);
-    if (discEl) discEl.textContent = String(playerData?.discardCount ?? 0);
-
-    if (field)  field.innerHTML = '';
-    if (hand)   hand.innerHTML  = '';
-
-    // FIELD: enforce facedown for traps that haven't fired
-    (playerData?.field || []).forEach(card => {
-      const id3 = extractNumericId(card);
-      const fired = Boolean(card && card._fired);
-      const isTrap = isTrapIdByRange(id3);
-      const facedown = Boolean(card && card.isFaceDown) || (isTrap && !fired);
-      field && field.appendChild(renderCard(card, facedown));
-    });
-
-    // HAND: always facedown in spectator view, just render counts
-    const facedown = Number(playerData?.handCount ?? (playerData?.hand?.length ?? 0)) || 0;
-    for (let i = 0; i < facedown; i++) {
-      hand && hand.appendChild(renderCard({ cardId: 0 }, true));
-    }
-  }
-
-  // ---- Name fetch helper (optional, once) ----
-  let _nameFetched = false;
-  async function fetchNameFromTokenOnce() {
-    if (_nameFetched || !TOKEN) return;
-    _nameFetched = true;
-    try {
-      const url = apiUrl(`/me/${encodeURIComponent(TOKEN)}/stats`);
-      const res = await fetch(url, { cache: 'no-store' });
-      if (!res.ok) return;
-      const data = await res.json().catch(() => null);
-      const nick = (data?.discordName || data?.name || '').trim();
-      if (nick) {
-        STICKY_NAMES.player1 = STICKY_NAMES.player1 || nick;
-        console.log('[Spectator] resolved player1 from token:', nick);
-      }
-    } catch {}
-  }
-
-  // ---- Winner overlay ----
-  let summaryShown = false;
-  function nameOrSticky(key, fallback) {
-    return STICKY_NAMES[key] || $(`#${key}-name`)?.textContent || fallback;
-  }
-  function showWinnerOverlayFrom(stateLike) {
-    if (summaryShown) return;
-    summaryShown = true;
-
-    const overlay = document.createElement('div');
-    overlay.id = 'spectator-summary-overlay';
-    overlay.style.cssText = `
-      position:fixed; inset:0; background:rgba(0,0,0,.78); z-index:10000;
-      display:flex; align-items:center; justify-content:center; padding:24px;`;
-
-    const panel = document.createElement('div');
-    panel.style.cssText = `
-      background:#0f1114; color:#e6e6e6; width:min(900px, 96vw); border-radius:16px;
-      box-shadow: 0 20px 60px rgba(0,0,0,.6); padding:22px 22px 16px;`;
-
-    const wKey = stateLike?.winner || 'player1';
-    const lKey = wKey === 'player1' ? 'player2' : 'player1';
-
-    const title = document.createElement('div');
-    title.style.cssText = 'font-size:24px; font-weight:800; margin-bottom:6px;';
-    title.textContent = `🏆 Winner: ${nameOrSticky(wKey, wKey)}`;
-
-    const sub = document.createElement('div');
-    sub.style.cssText = 'opacity:.8; margin-bottom:14px;';
-    sub.textContent = 'Duel Summary (spectator)';
-
-    const grid = document.createElement('div');
-    grid.style.cssText = 'display:grid; grid-template-columns: 1fr 1fr; gap:14px;';
-
-    const p1 = stateLike?.players?.player1 || {};
-    const p2 = stateLike?.players?.player2 || {};
-    const cardFor = (key, label, P) => {
-      const wrap = document.createElement('div');
-      wrap.style.cssText = 'border:1px solid #26303a; border-radius:12px; padding:12px;';
-      const h = document.createElement('div');
-      h.style.cssText = 'font-weight:700; margin-bottom:8px;';
-      h.textContent = `${label} — ${nameOrSticky(key, key)}`;
-      const list = document.createElement('div');
-      list.innerHTML = `
-        <div>HP: <b>${P.hp ?? 0}</b></div>
-        <div>Field: <b>${(P.field||[]).length}</b></div>
-        <div>Hand: <b>${P.handCount ?? (Array.isArray(P.hand) ? P.hand.length : 0)}</b></div>
-        <div>Deck: <b>${P.deckCount ?? (Array.isArray(P.deck) ? P.deck.length : 0)}</b></div>
-        <div>Discard: <b>${P.discardCount ?? (Array.isArray(P.discardPile) ? P.discardPile.length : 0)}</b></div>
-      `;
-      wrap.appendChild(h); wrap.appendChild(list);
-      return wrap;
-    };
-    grid.appendChild(cardFor('player1', wKey === 'player1' ? 'Winner' : 'Opponent', p1));
-    grid.appendChild(cardFor('player2', wKey === 'player2' ? 'Winner' : 'Opponent', p2));
-
-    const close = document.createElement('button');
-    close.textContent = 'Close';
-    close.style.cssText = 'margin-top:14px; padding:10px 14px; border-radius:10px; border:1px solid #2b3946; background:#16202a; color:#e6e6e6; cursor:pointer;';
-    close.onclick = () => overlay.remove();
-
-    panel.appendChild(title);
-    panel.appendChild(sub);
-    panel.appendChild(grid);
-    panel.appendChild(close);
-
-    overlay.appendChild(panel);
-    document.body.appendChild(overlay);
-  }
-
-  // Listen for duel-end events forwarded by chatClient.js
-  window.addEventListener('spectator:duel_result', (e) => {
-    try {
-      const payload = e.detail || {};
-      if (payload && payload.winner) {
-        showWinnerOverlayFrom(payload);
-        pollMs = Math.max(pollMs, MAX_POLL_MS); // slow down polling after finish
-      }
-    } catch {}
+// Canonical SV13 spectator client.
+// Public duel state is read only from GET /duel/:session/spectator.
+(function spectatorApp() {
+  'use strict';
+
+  const API_BASE = 'https://api.sv13tcg.com';
+  const IMAGE_BASE = 'https://sv13tcg.com/assets/cards';
+  const HUB_URL = 'https://sv13tcg.com/';
+  const SESSION_RE = /^[A-Za-z0-9_-]{12,128}$/;
+  const POLL_MS = 2500;
+  const ERROR_POLL_MS = 6000;
+  const FINISHED_POLL_MS = 15000;
+  const BGM_STORE_KEY = 'sv13_spectator_bgm.muted';
+
+  const qs = new URLSearchParams(location.search);
+  const sessionId = String(qs.get('session') || '').trim();
+  const viewerToken = String(qs.get('token') || '').trim();
+
+  // Expose only spectator routing/identity inputs. The token is never used to
+  // choose Player 1/Player 2 or request private duel state.
+  window.SV13_SPECTATOR = Object.freeze({
+    sessionId,
+    viewerToken,
+    apiBase: API_BASE,
   });
 
-  // ---- Normalizer: matches your live payload
-  function normalizeState(raw) {
-    const current =
-      raw?.currentPlayer ||
-      raw?.turn?.current ||
-      raw?.turn?.player ||
-      raw?.activePlayer ||
-      raw?.whoseTurn ||
-      'player1';
+  const state = {
+    cardManifest: Object.create(null),
+    cardBack: '000_WinterlandDeathDeck_Back.png',
+    lastSignature: '',
+    lastGood: null,
+    timer: null,
+    stopped: false,
+    resultShownFor: null,
+    errorCount: 0,
+  };
 
-    const watcherCount = Number(
-      raw?.spectatorCount ??
-      (Array.isArray(raw?.spectators) ? raw.spectators.length : 0)
-    ) || 0;
+  const $ = (id) => document.getElementById(id);
 
-    let p1 = raw?.players?.player1 || raw?.players?.p1 || raw?.challenger || null;
-    let p2 = raw?.players?.player2 || raw?.players?.p2 || raw?.opponent   || null;
+  function setText(id, value) {
+    const el = $(id);
+    if (el) el.textContent = String(value ?? '');
+  }
 
-    // pick up bot data for practice duels
-    if (!p2 && raw?.players?.bot) p2 = raw.players.bot;
+  function setStatus(message, kind = 'live') {
+    const el = $('spectator-status');
+    if (!el) return;
+    el.textContent = message;
+    el.className = `status status--${kind}`;
+  }
 
-    if (!p1 || !p2) {
-      if (Array.isArray(raw?.players)) {
-        p1 = raw.players[0] || p1;
-        p2 = raw.players[1] || p2;
-      }
-      p1 = p1 || raw?.player1 || raw?.playerA || raw?.a || null;
-      p2 = p2 || raw?.player2 || raw?.playerB || raw?.b || null;
-    }
+  function trustedHubUrl() {
+    const url = new URL(HUB_URL);
+    if (viewerToken) url.searchParams.set('token', viewerToken);
+    return url.toString();
+  }
 
-    function isGeneric(n) {
-      const s = String(n || '').toLowerCase();
-      return !s || s === 'player' || s === 'player 1' || s === 'player1' || s === 'challenger';
-    }
+  function wireHub() {
+    const link = $('hubBtn');
+    if (link) link.href = trustedHubUrl();
+  }
 
-    function unifyPlayer(p, defaults, key) {
-      // compose fallback → sticky → url hint → defaults
-      const urlHint =
-        (key === 'player1' ? P1_HINT : P2_HINT) ||
-        (key === 'player2' && mode === 'practice' ? 'Practice Bot' : null);
-
-      const fallbackName = STICKY_NAMES[key] || urlHint || defaults?.name || 'Player';
-
-      if (!p) {
-        return {
-          name: fallbackName,
-          hp: 200,
-          field: [],
-          handCount: 0,
-          deckCount: 0,
-          discardCount: 0
-        };
-      }
-
-      let computedName =
-        p.discordName || p.name || p.displayName || fallbackName;
-
-      // If the server gave us a generic label, prefer URL hint / sticky
-      if (isGeneric(computedName)) {
-        computedName = fallbackName;
-      }
-
-      // stick the first non-empty non-generic name we see
-      if (computedName && !isGeneric(computedName) && !STICKY_NAMES[key]) {
-        STICKY_NAMES[key] = computedName;
-      }
-
-      const hp = p.hp ?? p.HP ?? p.health ?? p.life ?? defaults?.hp ?? 200;
-      const fieldRaw = p.field || p.board || p.battlefield || p.slots || p.inPlay || [];
-      const field = Array.isArray(fieldRaw) ? fieldRaw : [];
-      const handCount = p.handCount ?? (Array.isArray(p.hand) ? p.hand.length : 0);
-      const deckCount = Array.isArray(p.deck) ? p.deck.length : (p.deckCount ?? 0);
-      const discardCount = Array.isArray(p.discardPile) ? p.discardPile.length : (p.discardCount ?? 0);
-
-      return { name: computedName, hp: Number(hp) || 0, field, handCount, deckCount, discardCount };
-    }
-
-    const P1 = unifyPlayer(p1, { name: 'Challenger', hp: 200 }, 'player1');
-    const P2 = unifyPlayer(p2, { name: mode === 'practice' ? 'Practice Bot' : 'Opponent', hp: 200 }, 'player2');
-
-    const vm = {
-      currentPlayer: current,
-      spectatorCount: watcherCount,
-      players: { player1: P1, player2: P2 },
-      winner: raw?.winner || null
-    };
+  function setupMusic() {
+    if (window.__SV13_SPEC_BGM_READY__) return;
+    const audio = $('spec-bgm');
+    const button = $('specAudioToggle');
+    if (!audio || !button) return;
+    window.__SV13_SPEC_BGM_READY__ = true;
 
     try {
-      console.log('[Spectator] normalized:', {
-        turn: vm.currentPlayer,
-        spectators: vm.spectatorCount,
-        winner: vm.winner || '(none)',
-        p1: { name: P1.name, hp: P1.hp, field: P1.field.length, hand: P1.handCount, deck: P1.deckCount, discard: P1.discardCount },
-        p2: { name: P2.name, hp: P2.hp, field: P2.field.length, hand: P2.handCount, deck: P2.deckCount, discard: P2.discardCount }
-      });
+      const saved = localStorage.getItem(BGM_STORE_KEY);
+      if (saved !== null) audio.muted = saved === 'true';
     } catch {}
-    return vm;
-  }
 
-  function resolveTurnLabel(current, players) {
-    const key = String(current || '').toLowerCase();
-    if (key === 'player1' || key === 'player2') {
-      return players?.[key]?.name || STICKY_NAMES[key] || key;
-    }
-    return current || 'player1';
-  }
-
-  function detectWinnerFromState(vm) {
-    if (vm.winner) return vm.winner;
-    const p1hp = Number(vm.players?.player1?.hp ?? 0);
-    const p2hp = Number(vm.players?.player2?.hp ?? 0);
-    if (p1hp <= 0 && p2hp > 0) return 'player2';
-    if (p2hp <= 0 && p1hp > 0) return 'player1';
-    if (p1hp <= 0 && p2hp <= 0) return 'player1'; // tie-breaker
-    return null;
-  }
-
-  function renderSpectatorView(rawState) {
-    const state = normalizeState(rawState);
-
-    // Spectator presence count (keeps header in sync with chat presence)
-    const wc = document.getElementById('watching-count');
-    if (wc && Number.isFinite(state.spectatorCount)) {
-      wc.textContent = `Spectators Watching: ${state.spectatorCount}`;
+    function updateButton() {
+      button.textContent = audio.muted ? '🔇' : '🔊';
+      button.setAttribute('aria-label', audio.muted ? 'Play background music' : 'Mute background music');
     }
 
-    const turnName = resolveTurnLabel(state.currentPlayer, state.players);
-    setText('#turn-display', `Current Turn: ${turnName}`);
-
-    const p1Name = state.players.player1.name || STICKY_NAMES.player1 || 'Challenger';
-    const p2Name = state.players.player2.name || STICKY_NAMES.player2 || 'Opponent';
-    setText('#player1-name', p1Name);
-    setText('#player2-name', p2Name);
-
-    renderPlayer('player1', state.players.player1);
-    renderPlayer('player2', state.players.player2);
-
-    // Winner overlay (once)
-    const computedWinner = detectWinnerFromState(state);
-    if (computedWinner && !summaryShown) {
-      showWinnerOverlayFrom({ ...state, winner: computedWinner });
-      // after finish, relax polling to reduce API pressure
-      pollMs = Math.max(pollMs, MAX_POLL_MS);
+    function persist() {
+      try { localStorage.setItem(BGM_STORE_KEY, String(audio.muted)); } catch {}
     }
-  }
 
-  // ---- Polling with robust backoff on 429 (and temporary errors)
-  let pollMs = 3000;
-  const BASE_POLL_MS = 3000;
-  const MAX_POLL_MS = 15000;
+    button.addEventListener('click', () => {
+      audio.muted = !audio.muted;
+      audio.volume = audio.muted ? 0 : 1;
+      persist();
+      updateButton();
+      audio.play().catch(() => {});
+    });
 
-  function bumpBackoff(prev) {
-    // exponential-ish + small jitter
-    const next = Math.min(Math.ceil(prev * 1.6) + Math.floor(Math.random() * 400), MAX_POLL_MS);
-    return next;
-  }
-
-  // ETag + last-good snapshot to avoid flicker and cut 429s
-  let lastETag = null;
-  let lastGoodState = null;
-
-  async function fetchDuelStateOnce() {
-    const buildUrl = (path) => {
-      const url = new URL(apiUrl(path), location.origin);
-      if (mode !== 'practice' && sessionId) url.searchParams.set('session', sessionId);
-      url.searchParams.set('safeView', 'true');
-      // when no duel exists, return a harmless stub instead of 404 → easier polling
-      url.searchParams.set('allowEmpty', 'true');
-      if (TOKEN) url.searchParams.set('token', TOKEN);
-      return url;
+    const unlock = () => {
+      audio.play().catch(() => {});
+      window.removeEventListener('pointerdown', unlock);
+      window.removeEventListener('keydown', unlock);
     };
+    window.addEventListener('pointerdown', unlock, { passive: true });
+    window.addEventListener('keydown', unlock);
+    updateButton();
+  }
 
-    // Prefer live endpoint first; keep the old heartbeat as a fallback
-    const candidates = ['/duel/current', '/duel/state'];
+  function numericCardId(card) {
+    const raw = card && typeof card === 'object'
+      ? (card.cardId ?? card.card_id ?? card.id ?? card.number)
+      : card;
+    if (raw === null || raw === undefined) return null;
+    const match = String(raw).match(/(\d{1,3})/);
+    return match ? String(Number(match[1])).padStart(3, '0') : null;
+  }
 
-    let lastErr = null;
-    for (const path of candidates) {
-      try {
-        const url = buildUrl(path);
-        const headers = { 'Cache-Control': 'no-cache' };
-        if (lastETag) headers['If-None-Match'] = lastETag;
+  function cardMeta(id) {
+    return state.cardManifest[id] || null;
+  }
 
-        const res = await fetch(url.toString(), { cache: 'no-store', headers, mode: 'cors' });
+  function isConcealed(card) {
+    return Boolean(card?.concealed || card?.isFaceDown || numericCardId(card) === '000');
+  }
 
-        if (res.status === 304 && lastGoodState) {
-          // Not modified → reuse last snapshot (no UI churn)
-          pollMs = BASE_POLL_MS;
-          return lastGoodState;
-        }
+  function cardImageUrl(card, faceDown = false) {
+    if (faceDown || isConcealed(card)) {
+      return `${IMAGE_BASE}/${encodeURIComponent(state.cardBack)}`;
+    }
+    const id = numericCardId(card);
+    const meta = id ? cardMeta(id) : null;
+    const filename = meta?.image || card?.image || card?.filename || '';
+    if (!filename) return `${IMAGE_BASE}/${encodeURIComponent(state.cardBack)}`;
+    if (/^https?:\/\//i.test(filename)) return filename;
+    return `${IMAGE_BASE}/${encodeURIComponent(String(filename).split('/').pop())}`;
+  }
 
-        if (!res.ok) {
-          if (res.status === 429) pollMs = bumpBackoff(pollMs);
-          else if (res.status >= 500) pollMs = bumpBackoff(pollMs);
-          throw new Error(`Failed (${res.status}) on ${path}`);
-        }
+  function setCardImage(img, primary) {
+    const fallback = `${IMAGE_BASE}/${encodeURIComponent(state.cardBack)}`;
+    img.onerror = null;
+    img.addEventListener('error', function onError() {
+      img.removeEventListener('error', onError);
+      if (img.src !== fallback) img.src = fallback;
+    }, { once: true });
+    img.src = primary;
+  }
 
-        // success → reset backoff
-        pollMs = BASE_POLL_MS;
+  function createCard(card, forceFaceDown = false) {
+    const id = numericCardId(card);
+    const faceDown = forceFaceDown || isConcealed(card);
+    const meta = id ? cardMeta(id) : null;
+    const wrap = document.createElement('div');
+    wrap.className = `card${faceDown ? ' face-down' : ''}`;
+    wrap.dataset.cardId = faceDown ? '000' : (id || '');
 
-        // Track ETag for conditional next time
-        const et = res.headers.get('ETag');
-        if (et) lastETag = et;
+    const img = document.createElement('img');
+    img.alt = faceDown ? 'Face-down card' : (meta?.name || `Card ${id || ''}`.trim());
+    img.loading = 'eager';
+    img.decoding = 'async';
+    setCardImage(img, cardImageUrl(card, faceDown));
+    wrap.appendChild(img);
 
-        const json = await res.json();
-        lastGoodState = json;
-        return json;
-      } catch (err) {
-        lastErr = err;
+    if (!faceDown) {
+      const label = document.createElement('div');
+      label.className = 'card-name';
+      label.textContent = meta?.name || (id ? `#${id}` : 'Card');
+      wrap.appendChild(label);
+    }
+    return wrap;
+  }
+
+  function fieldSignature(field) {
+    return (Array.isArray(field) ? field : []).map(card => {
+      const id = numericCardId(card) || '000';
+      return `${id}:${card?.isFaceDown ? 1 : 0}:${card?._fired ? 1 : 0}:${card?.concealed ? 1 : 0}`;
+    }).join('|');
+  }
+
+  function normalizePlayer(player, seat) {
+    if (!player || typeof player !== 'object') throw new Error(`Missing ${seat} public state`);
+    const field = Array.isArray(player.field) ? player.field : [];
+    const discard = Array.isArray(player.discard) ? player.discard : [];
+    return {
+      displayName: String(player.displayName || seat),
+      controller: String(player.controller || 'human'),
+      hp: Number.isFinite(Number(player.hp)) ? Number(player.hp) : 0,
+      field,
+      handCount: Math.max(0, Number(player.handCount) || 0),
+      deckCount: Math.max(0, Number(player.deckCount) || 0),
+      discardCount: discard.length,
+      deckName: String(player.deckName || ''),
+    };
+  }
+
+  function normalizePayload(raw) {
+    if (!raw || typeof raw !== 'object') throw new Error('Invalid spectator payload');
+    if (String(raw.id || '') !== sessionId) throw new Error('Session mismatch');
+    if (!Number.isFinite(Number(raw.revision))) throw new Error('Missing session revision');
+
+    return {
+      id: String(raw.id),
+      mode: String(raw.mode || 'pvp'),
+      status: String(raw.status || 'unknown'),
+      revision: Number(raw.revision),
+      currentPlayer: raw.currentPlayer === 'player2' ? 'player2' : (raw.currentPlayer === 'player1' ? 'player1' : null),
+      turn: Math.max(0, Number(raw.turn) || 0),
+      winner: raw.winner === 'player1' || raw.winner === 'player2' ? raw.winner : null,
+      reason: String(raw.reason || ''),
+      spectatorCount: Math.max(0, Number(raw.spectatorCount) || 0),
+      player1: normalizePlayer(raw.player1, 'player1'),
+      player2: normalizePlayer(raw.player2, 'player2'),
+    };
+  }
+
+  function renderPlayer(seat, player, revision) {
+    const root = $(seat);
+    if (!root) return;
+
+    setText(`${seat}-name`, player.displayName);
+    setText(`${seat}-hp`, player.hp);
+
+    const handCount = root.querySelector('.hand-count');
+    const deckCount = root.querySelector('.deck-count');
+    const discardCount = root.querySelector('.discard-count');
+    if (handCount) handCount.textContent = String(player.handCount);
+    if (deckCount) deckCount.textContent = String(player.deckCount);
+    if (discardCount) discardCount.textContent = String(player.discardCount);
+
+    const field = root.querySelector('.field');
+    const hand = root.querySelector('.hand');
+    if (field) {
+      const signature = `${revision}:${fieldSignature(player.field)}`;
+      if (field.dataset.renderSignature !== signature) {
+        field.replaceChildren(...player.field.map(card => createCard(card, false)));
+        field.dataset.renderSignature = signature;
       }
     }
-    throw lastErr || new Error('Unable to fetch duel state');
-  }
-
-  async function fetchDuelState() {
-    try {
-      const state = await fetchDuelStateOnce();
-      renderSpectatorView(state);
-      setText('#spectator-status', 'Live match —');
-    } catch (err) {
-      console.error('[Spectator] fetch error:', err);
-      setText('#spectator-status', 'Failed to load duel.');
-    } finally {
-      setTimeout(fetchDuelState, pollMs);
-    }
-  }
-
-  // ---- Manifest loader (non-blocking; best-effort)
-  async function loadManifest() {
-    try {
-      const url = `${IMG_BASE}/manifest.json`;
-      const res = await fetch(url, { cache: 'no-store' });
-      if (!res.ok) return;
-      const json = await res.json().catch(() => null);
-      if (!json || typeof json !== 'object') return;
-      CARD_MANIFEST = json;
-      if (typeof CARD_MANIFEST.back === 'string' && CARD_MANIFEST.back.trim()) {
-        BACK_OVERRIDE = CARD_MANIFEST.back.trim();
+    if (hand) {
+      const signature = `${revision}:${player.handCount}`;
+      if (hand.dataset.renderSignature !== signature) {
+        const backs = Array.from({ length: player.handCount }, () => createCard({ cardId: '000', isFaceDown: true }, true));
+        hand.replaceChildren(...backs);
+        hand.dataset.renderSignature = signature;
       }
-      MANIFEST_READY = true;
-      try { console.log('[Spectator] card manifest loaded:', Object.keys(CARD_MANIFEST).length, 'entries'); } catch {}
-    } catch {
-      // optional; ignore errors
     }
   }
 
-  (async () => {
-    // Prime stickies from URL hints immediately (no flicker)
-    if (P1_HINT && !STICKY_NAMES.player1) STICKY_NAMES.player1 = P1_HINT;
-    if (P2_HINT && !STICKY_NAMES.player2) STICKY_NAMES.player2 = P2_HINT || (mode === 'practice' ? 'Practice Bot' : null);
+  function renderPresence(count) {
+    setText('watching-count', `Spectators Watching: ${count}`);
+    const chatPresence = $('chat-presence');
+    if (chatPresence && !window.__SV13_CHAT_HAS_PRESENCE__) chatPresence.textContent = `${count} online`;
+  }
 
-    // Optionally resolve player1 from token once
-    await fetchNameFromTokenOnce().catch(()=>{});
+  function reasonLabel(reason) {
+    const labels = {
+      hp_zero: 'HP reached 0',
+      no_cards: 'A player ran out of playable cards',
+      exhausted: 'Both players exhausted their remaining plays',
+      combat_exhaustion: 'Both players exhausted their remaining combat options',
+      cards_exhausted: 'Both players ran out of cards',
+      forfeit: 'Forfeit',
+      forfeited: 'Forfeit',
+      abandoned: 'Duel abandoned',
+    };
+    return labels[reason] || reason.replace(/_/g, ' ') || 'Duel complete';
+  }
 
-    await loadManifest().catch(() => {});
-    fetchDuelState();
-  })();
+  function showResult(vm) {
+    if (state.resultShownFor === `${vm.id}:${vm.revision}`) return;
+    state.resultShownFor = `${vm.id}:${vm.revision}`;
+
+    const wrap = $('duelResult');
+    const winner = $('duelResultWinner');
+    const reason = $('duelResultReason');
+    if (!wrap || !winner || !reason) return;
+
+    if (vm.winner) {
+      const player = vm[vm.winner];
+      winner.textContent = `Winner: ${player?.displayName || vm.winner}`;
+    } else {
+      winner.textContent = 'Result: Draw';
+    }
+    reason.textContent = reasonLabel(vm.reason);
+    wrap.hidden = false;
+    wrap.classList.add('show');
+  }
+
+  function hideResult() {
+    const wrap = $('duelResult');
+    if (!wrap) return;
+    wrap.classList.remove('show');
+    wrap.hidden = true;
+  }
+
+  function renderState(vm) {
+    const signature = [
+      vm.revision,
+      vm.status,
+      vm.currentPlayer || '',
+      vm.winner || '',
+      vm.player1.hp,
+      vm.player2.hp,
+      vm.player1.handCount,
+      vm.player2.handCount,
+      vm.player1.deckCount,
+      vm.player2.deckCount,
+      vm.player1.discardCount,
+      vm.player2.discardCount,
+      fieldSignature(vm.player1.field),
+      fieldSignature(vm.player2.field),
+    ].join('::');
+
+    document.body.classList.toggle('practice-mode', vm.mode === 'practice');
+    document.body.classList.toggle('pvp-mode', vm.mode === 'pvp');
+    renderPresence(vm.spectatorCount);
+
+    if (vm.status !== 'live' && vm.status !== 'finished') {
+      setText('player1-name', vm.player1.displayName);
+      setText('player2-name', vm.player2.displayName);
+      clearBoardForUnavailable();
+      if (['expired', 'denied', 'cancelled', 'forfeited', 'abandoned'].includes(vm.status)) {
+        setStatus(`Session ${vm.status}.`, 'error');
+      } else {
+        setStatus(`Session ${vm.status} — waiting for duel state.`, 'loading');
+      }
+      return;
+    }
+
+    if (signature !== state.lastSignature) {
+      state.lastSignature = signature;
+      renderPlayer('player1', vm.player1, vm.revision);
+      renderPlayer('player2', vm.player2, vm.revision);
+
+      $('player1')?.classList.toggle('active', vm.status === 'live' && vm.currentPlayer === 'player1');
+      $('player2')?.classList.toggle('active', vm.status === 'live' && vm.currentPlayer === 'player2');
+
+      if (vm.status === 'live') {
+        const current = vm.currentPlayer ? vm[vm.currentPlayer]?.displayName : 'Waiting';
+        setText('turn-display', vm.currentPlayer ? `Turn ${vm.turn} — ${current}` : `Turn ${vm.turn}`);
+        setStatus(`${vm.mode === 'practice' ? 'Practice' : 'PvP'} duel live • Revision ${vm.revision}`, 'live');
+      } else if (vm.status === 'finished') {
+        setText('turn-display', 'Duel finished');
+        setStatus(`Duel finished • Revision ${vm.revision}`, 'finished');
+      } else if (['expired', 'denied', 'cancelled', 'forfeited', 'abandoned'].includes(vm.status)) {
+        setText('turn-display', 'Session is no longer active');
+        setStatus(`Session ${vm.status}.`, 'error');
+      } else {
+        setText('turn-display', 'Waiting for duel to begin');
+        setStatus(`Session ${vm.status}.`, 'loading');
+      }
+    }
+
+    if (vm.status === 'finished') showResult(vm);
+  }
+
+  function clearBoardForUnavailable() {
+    for (const seat of ['player1', 'player2']) {
+      setText(`${seat}-hp`, '—');
+      const root = $(seat);
+      if (!root) continue;
+      for (const el of root.querySelectorAll('.hand-count, .deck-count, .discard-count')) el.textContent = '—';
+      root.querySelector('.field')?.replaceChildren();
+      root.querySelector('.hand')?.replaceChildren();
+      root.classList.remove('active');
+    }
+    setText('turn-display', '');
+  }
+
+  function nextDelay(vm) {
+    if (document.hidden) return FINISHED_POLL_MS;
+    if (vm?.status === 'finished') return FINISHED_POLL_MS;
+    return state.errorCount ? ERROR_POLL_MS : POLL_MS;
+  }
+
+  function schedule(delay) {
+    clearTimeout(state.timer);
+    if (state.stopped) return;
+    state.timer = setTimeout(loadState, delay);
+  }
+
+  async function loadState() {
+    if (state.stopped) return;
+    if (document.hidden) {
+      schedule(FINISHED_POLL_MS);
+      return;
+    }
+
+    const url = `${API_BASE}/duel/${encodeURIComponent(sessionId)}/spectator`;
+    try {
+      const response = await fetch(url, {
+        method: 'GET',
+        cache: 'no-store',
+        headers: { Accept: 'application/json' },
+      });
+
+      if (response.status === 404) {
+        state.errorCount = 0;
+        state.lastGood = null;
+        clearBoardForUnavailable();
+        setStatus('Invalid or expired duel session.', 'error');
+        return;
+      }
+      if (!response.ok) throw new Error(`Spectator API returned ${response.status}`);
+
+      const vm = normalizePayload(await response.json());
+      state.errorCount = 0;
+      state.lastGood = vm;
+      renderState(vm);
+      schedule(nextDelay(vm));
+    } catch (error) {
+      state.errorCount += 1;
+      console.error('[Spectator] state fetch failed:', error);
+      if (state.lastGood) {
+        setStatus('Connection interrupted — showing the last confirmed duel state.', 'warning');
+      } else {
+        clearBoardForUnavailable();
+        setStatus('Spectator service unavailable. Retrying…', 'error');
+      }
+      schedule(ERROR_POLL_MS);
+    }
+  }
+
+  async function loadCardManifest() {
+    try {
+      const response = await fetch('data/card-manifest.json', { cache: 'no-store' });
+      if (!response.ok) throw new Error(`Card manifest returned ${response.status}`);
+      const payload = await response.json();
+      state.cardManifest = payload?.cards && typeof payload.cards === 'object' ? payload.cards : Object.create(null);
+      const back = state.cardManifest['000']?.image;
+      if (back) state.cardBack = back;
+    } catch (error) {
+      console.warn('[Spectator] card manifest unavailable; card backs will be used as fallback.', error);
+    }
+  }
+
+  function boot() {
+    wireHub();
+    setupMusic();
+    $('duelResultClose')?.addEventListener('click', hideResult);
+    $('duelResult')?.addEventListener('click', event => {
+      if (event.target === $('duelResult')) hideResult();
+    });
+
+    if (!SESSION_RE.test(sessionId)) {
+      clearBoardForUnavailable();
+      setStatus('Invalid or missing duel session.', 'error');
+      return;
+    }
+
+    loadCardManifest().finally(loadState);
+
+    document.addEventListener('visibilitychange', () => {
+      if (!document.hidden && !state.stopped) {
+        clearTimeout(state.timer);
+        loadState();
+      }
+    });
+    window.addEventListener('focus', () => {
+      if (!document.hidden && !state.stopped) {
+        clearTimeout(state.timer);
+        loadState();
+      }
+    });
+    window.addEventListener('pagehide', () => {
+      state.stopped = true;
+      clearTimeout(state.timer);
+    }, { once: true });
+  }
+
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', boot, { once: true });
+  else boot();
 })();
