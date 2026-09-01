@@ -4,7 +4,7 @@
   'use strict';
 
   const API_BASE = 'https://api.sv13tcg.com';
-  const IMAGE_BASE = 'https://sv13tcg.com/assets/cards';
+  const DEFAULT_IMAGE_BASE = 'https://collection.sv13tcg.com/images/cards';
   const HUB_URL = 'https://sv13tcg.com/';
   const SESSION_RE = /^[A-Za-z0-9_-]{12,128}$/;
   const POLL_MS = 2500;
@@ -26,7 +26,8 @@
 
   const state = {
     cardManifest: Object.create(null),
-    cardBack: '000_WinterlandDeathDeck_Back.png',
+    imageBase: DEFAULT_IMAGE_BASE,
+    cardBack: '000_CardBack_Unique.png',
     lastSignature: '',
     lastGood: null,
     timer: null,
@@ -118,18 +119,18 @@
 
   function cardImageUrl(card, faceDown = false) {
     if (faceDown || isConcealed(card)) {
-      return `${IMAGE_BASE}/${encodeURIComponent(state.cardBack)}`;
+      return `${state.imageBase}/${encodeURIComponent(state.cardBack)}`;
     }
     const id = numericCardId(card);
     const meta = id ? cardMeta(id) : null;
     const filename = meta?.image || card?.image || card?.filename || '';
-    if (!filename) return `${IMAGE_BASE}/${encodeURIComponent(state.cardBack)}`;
+    if (!filename) return `${state.imageBase}/${encodeURIComponent(state.cardBack)}`;
     if (/^https?:\/\//i.test(filename)) return filename;
-    return `${IMAGE_BASE}/${encodeURIComponent(String(filename).split('/').pop())}`;
+    return `${state.imageBase}/${encodeURIComponent(String(filename).split('/').pop())}`;
   }
 
   function setCardImage(img, primary) {
-    const fallback = `${IMAGE_BASE}/${encodeURIComponent(state.cardBack)}`;
+    const fallback = `${state.imageBase}/${encodeURIComponent(state.cardBack)}`;
     img.onerror = null;
     img.addEventListener('error', function onError() {
       img.removeEventListener('error', onError);
@@ -415,12 +416,21 @@
 
   async function loadCardManifest() {
     try {
-      const response = await fetch('data/card-manifest.json', { cache: 'no-store' });
+      const response = await fetch('data/card-manifest.json?v=10', { cache: 'no-store' });
       if (!response.ok) throw new Error(`Card manifest returned ${response.status}`);
       const payload = await response.json();
       state.cardManifest = payload?.cards && typeof payload.cards === 'object' ? payload.cards : Object.create(null);
-      const back = state.cardManifest['000']?.image;
-      if (back) state.cardBack = back;
+
+      // The actual card PNGs are served by the Collection UI's canonical custom
+      // domain. Do not route spectator images through the HUB domain; the HUB is
+      // navigation, not an asset host.
+      const declaredBase = String(payload?.assetBase || '').trim().replace(/\/+$/, '');
+      if (/^https:\/\/collection\.sv13tcg\.com\/images\/cards$/i.test(declaredBase)) {
+        state.imageBase = declaredBase;
+      }
+
+      const declaredBack = String(payload?.cardBack || '').trim();
+      if (declaredBack) state.cardBack = declaredBack.split('/').pop();
     } catch (error) {
       console.warn('[Spectator] card manifest unavailable; card backs will be used as fallback.', error);
     }

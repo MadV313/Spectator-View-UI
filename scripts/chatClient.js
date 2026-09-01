@@ -27,7 +27,7 @@ import { NET_LIMITS, pageHidden } from './net-hygiene.js';
     return;
   }
 
-  if (identity) identity.textContent = viewerToken ? 'Linked spectator identity' : 'Spectating anonymously';
+  if (identity) identity.textContent = viewerToken ? 'Resolving linked spectator…' : 'Spectating anonymously';
 
   const fmtTime = value => {
     const date = value ? new Date(value) : new Date();
@@ -37,6 +37,20 @@ import { NET_LIMITS, pageHidden } from './net-hygiene.js';
 
   function setTypingText(text) {
     if (typing) typing.textContent = text || '';
+  }
+
+  let resolvedViewerName = '';
+  function setViewerIdentity(name) {
+    const clean = String(name || '').replace(/\s+/g, ' ').trim().slice(0, 32);
+    if (!viewerToken || !clean || clean === 'Spectator') return;
+    resolvedViewerName = clean;
+    if (identity) identity.textContent = `Spectating as ${clean}`;
+  }
+
+  function consumeIdentity(payload) {
+    if (!payload || typeof payload !== 'object') return;
+    if (payload.roomId && String(payload.roomId) !== sessionId) return;
+    setViewerIdentity(payload.name || payload.displayName || payload.viewerName || payload.selfName);
   }
 
   function setPresence(count) {
@@ -88,6 +102,15 @@ import { NET_LIMITS, pageHidden } from './net-hygiene.js';
     if (!payload || String(payload.roomId || '') !== sessionId) return;
     const names = Array.isArray(payload.users) ? payload.users.map(value => String(value || 'Spectator')) : [];
     setPresence(payload.count ?? names.length);
+    consumeIdentity(payload);
+
+    // Current Duel-Bot presence exposes display names but not a socket->name map.
+    // When this linked viewer is the only spectator, the one non-anonymous name is
+    // unambiguously ours. With multiple viewers we wait for an explicit identity
+    // event or our first echoed chat message rather than guessing.
+    if (viewerToken && !resolvedViewerName && names.length === 1) {
+      setViewerIdentity(names[0]);
+    }
 
     const next = new Set(names);
     if (previousPresenceNames.size) {
@@ -167,8 +190,13 @@ import { NET_LIMITS, pageHidden } from './net-hygiene.js';
 
   socket.on('history', payload => {
     if (!payload || String(payload.roomId || '') !== sessionId) return;
+    consumeIdentity(payload);
     renderHistory(payload.messages);
   });
+
+  // Forward-compatible acknowledgement: the server can emit this after resolving
+  // the viewer token without exposing any player-seat/private duel information.
+  socket.on('identity', payload => consumeIdentity(payload));
 
   socket.on('presence', handlePresence);
 
@@ -180,6 +208,7 @@ import { NET_LIMITS, pageHidden } from './net-hygiene.js';
 
   socket.on('message', msg => {
     if (!msg || String(msg.roomId || '') !== sessionId) return;
+    if (msg.userId && String(msg.userId) === String(socket.id)) setViewerIdentity(msg.name);
     appendMessage(msg);
   });
 
