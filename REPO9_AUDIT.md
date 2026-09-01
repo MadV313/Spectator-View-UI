@@ -1,115 +1,105 @@
-# SV13 Repo 9 — Spectator-View-UI audit and repair
+# SV13 Repo 9 — Spectator-View-UI live-fix audit
 
 ## Scope
 
-The supplied `Spectator-View-UI-main(1).zip` was fully extracted and every source file in the repository was reviewed. The current Duel-Bot session/spectator/chat contract was also checked so this frontend uses the backend that is actually present rather than inventing another protocol.
+The supplied `Spectator-View-UI-main(2).zip` was fully extracted and every repository source file was reviewed again after the live `spectate.sv13tcg.com` smoke test.
 
-## Backend contract confirmed
+The live test proved the core Repo 9 architecture is working:
 
-The current Duel-Bot already provides the server pieces Repo 9 needs, so **no Duel-Bot files are included in this patch**:
+- unique practice session loads correctly
+- HP changes update live
+- turn/revision changes update live
+- public field changes update live
+- hand/deck/discard counts update live
+- concealed hands remain concealed
+- spectator chat can join the requested session and send messages
 
-- Public state: `GET /duel/:session/spectator`
-- Public serializer: session id/mode/status/revision, current player, turn, winner/reason, Player 1/2 display names, controller, HP, public field, public discard, handCount, deckCount, deckName, spectatorCount.
-- Concealed traps are redacted server-side to card `000`; the spectator browser never receives their real card id before reveal.
-- Chat namespace: `/spectator-chat`
-- Join: `join_room` with `{ session, token? }`
-- Server events: `history`, `presence`, `typing`, `message`
-- Client chat send: `chat_message`
-- Spectator count is sourced from the same per-session room registry used by the safe spectator serializer.
+Two live defects remained and are addressed in this pass: card assets and linked spectator identity presentation.
 
-## Critical findings in the supplied Spectator UI
+## Live defect 1 — card images were pointed at a non-asset host
 
-### 1. Wrong/global duel-state lookup
+The supplied spectator client used:
 
-The old client guessed between `/duel/current` and `/duel/state`, added `safeView/allowEmpty`, and special-cased practice mode. That could read the wrong session or depend on compatibility endpoints.
+`https://sv13tcg.com/assets/cards`
 
-**Repair:** one endpoint only: `/duel/<session>/spectator`. A valid unique session is required for practice and PvP. No requested session ever falls back to unrelated global state.
+That is not where the current production card PNGs are actually published. The current Card-Collection-UI publishes the canonical card files from `images/cards` on its custom domain.
 
-### 2. Spectator identity could become Player 1 identity
+### Repair
 
-The old code used `?user=`, player-name URL hints, local `DUEL_PLAYER_NAME`, and even `/me/:token/stats` to seed Player 1's displayed name.
+The spectator manifest now declares:
 
-**Repair:** Player 1 and Player 2 names now come only from the public session payload. Viewer token is optional and is used only for spectator chat identity and HUB navigation.
+`https://collection.sv13tcg.com/images/cards`
 
-### 3. Chat protocol did not match Duel-Bot
+The runtime consumes that declared asset base instead of routing images through the HUB domain.
 
-The old client connected to the root Socket.IO namespace, never joined a session room, emitted `chat:send`, and listened for `chat:message`/`spectator:joined`. Those are not the current server events.
+The card-back mismatch was also corrected. The master metadata still names card 000 as `000_WinterlandDeathDeck_Back.png`, but the current Card-Collection-UI repository actually contains `000_CardBack_Unique.png`. Spectator card backs now use the file that is really deployed.
 
-**Repair:** exact `/spectator-chat` contract, per-session `join_room`, server `history/presence/typing/message`, and client `chat_message`.
+Normal public cards still resolve by the canonical filenames in the existing 000–127 manifest.
 
-### 4. Chat name injection risk
+## Live defect 2 — linked spectator identity presentation
 
-The old chat renderer inserted the display name with `innerHTML`.
+The spectator frontend correctly did not trust a browser-provided username, but it only displayed `Linked spectator identity` when a viewer token existed and otherwise `Spectating anonymously`.
 
-**Repair:** names, times, and text are built with DOM nodes and `textContent` only.
+The current Duel-Bot chat server already resolves a supplied viewer token server-side to the linked Discord name before adding the spectator to the room. The current `/spectate` source also attempts to mint/reuse the linked token and include it in `PlayerLinks.spectator(session, token)`.
 
-### 5. Fake spectator count
+### Frontend repair
 
-The old client forced presence to `1` on socket connect and then used mutation observers/periodic DOM rewriting to make the two counters agree.
+The frontend now:
 
-**Repair:** both counters are driven from Duel-Bot's room-registry `presence` event and the safe state's authoritative `spectatorCount`.
+- displays `Resolving linked spectator…` while a tokenized viewer is joining
+- accepts a future explicit server `identity` acknowledgement without requiring another frontend change
+- safely resolves the viewer name from presence when that linked viewer is the only spectator
+- safely resolves the viewer name from the viewer's own echoed chat message (`userId === socket.id`)
+- displays `Spectating as <discord name>` once resolved
+- never uses that spectator identity to select or rename Player 1 or Player 2
+- never accepts a username from `?name=`, `?user=`, localStorage, or other browser-authored identity hints
 
-### 6. Render cache missed card replacements
+### Important deployment note
 
-The old cache compared HP and array counts only. A field card could change while the field stayed the same length and the UI would not redraw it.
+A spectator page opened with only `?session=<id>` cannot know the viewer's Discord identity. Anonymous public viewing remains intentional.
 
-**Repair:** render signatures contain the session revision plus card id/concealed/fired state for every public field card.
+For named spectator/chat identity the launch URL must include the linked viewer token:
 
-### 7. Duplicate winner systems
+`?session=<id>&token=<viewer token>`
 
-The supplied build had one result modal in `index.html` plus a second dynamically-created winner overlay in `spectatorview.js`, with HP-based winner inference in the browser.
+If the deployed `/spectate` command still outputs a session-only URL after the current Duel-Bot source is redeployed, the remaining issue is outside this frontend and should be traced in Duel-Bot's `cogs/spectate.js`, `utils/playerLinks.js`, and the linked-token storage call.
 
-**Repair:** one result modal only. Winner/draw/reason comes from the server session state; the spectator client does not authoritatively infer a winner from HP.
+## Cache/deployment hardening
 
-### 8. Duplicate BGM initialization and broken STORE_KEY write
+- spectator JS bumped to `v=10`
+- chat JS bumped to `v=10`
+- CSS URL bumped to `v=10`
+- card manifest fetch bumped to `v=10`
 
-Music was initialized in both `index.html` and `spectatorview.js`; one path wrote literally to localStorage key `STORE_KEY`.
+This prevents the previous GitHub Pages/browser cache from masking the live fix.
 
-**Repair:** one BGM initializer and one real key: `sv13_spectator_bgm.muted`.
+## Preserved Repo 9 architecture
 
-### 9. Card asset resolution was structurally broken
+This pass does not regress the previously repaired design:
 
-The repo contains no `images/cards` directory, yet the old client defaulted there and guessed filenames such as `001_Attack.png`; canonical files are named like `001_M4A1_Attack.png`.
+- one safe state endpoint: `GET /duel/:session/spectator`
+- no global/current duel fallback
+- no private hand identities or deck order
+- session player names only come from server session metadata
+- `/spectator-chat` room is scoped by session
+- server-driven spectator count
+- revision/card-signature render invalidation
+- one server-authoritative winner modal
+- one BGM initialization path
+- no `sv13.me` / `?me=` architecture
+- no GitHub production UI URL
+- unique practice sessions remain supported
 
-**Repair:** images use the canonical `https://sv13tcg.com/assets/cards` host. A local metadata manifest generated from the current Duel-Bot `CoreMasterReference.json` maps all 000–127 ids to their exact canonical filenames and names. Image failures fall back to the canonical card back.
+## Files updated in this pass
 
-### 10. Practice CSS selector was backwards
-
-The script adds `practice-mode` to `<body>`, but CSS used `.practice-mode body`.
-
-**Repair:** `body.practice-mode`.
-
-### 11. Legacy ME/GitHub routing
-
-The old page persisted `sv13.me`, propagated `?me=`, and returned to the old GitHub HUB URL.
-
-**Repair:** no ME path/storage. HUB destination is `https://sv13tcg.com/`; viewer token is appended only when one was explicitly supplied to the spectator page.
-
-## Failure/reconnect behavior
-
-- Missing or malformed session: explicit invalid-session state; no network guessing.
-- 404: explicit invalid/expired-session state.
-- API/network failure after a good state: preserve the last confirmed board and show a connection warning.
-- API/network failure before any good state: show service unavailable and retry at a relaxed interval.
-- Hidden tabs poll slowly; returning/focusing performs one catch-up fetch.
-- Finished matches poll slowly while chat remains available.
-
-## Files changed/added
-
-- `index.html`
 - `scripts/spectatorview.js`
 - `scripts/chatClient.js`
-- `scripts/net-hygiene.js`
-- `styles/spectator.css`
-- `data/card-manifest.json` (new, generated from current canonical Duel-Bot master)
-- `CNAME` (new)
-- `.nojekyll` (new)
-- `package.json` (new test harness only)
-- `test/repo9-contract.test.mjs` (new)
-- `REPO9_AUDIT.md` (new)
-- `TEST_REPORT.md` (new)
-- `SHA256SUMS.txt` (new)
+- `data/card-manifest.json`
+- `index.html`
+- `package.json`
+- `test/repo9-contract.test.mjs`
+- `REPO9_AUDIT.md`
+- `TEST_REPORT.md`
+- `SHA256SUMS.txt`
 
-## Deliberately not changed
-
-The repo's background image, snowfall GIF, and BGM MP3 are preserved and are not duplicated into the updated-files-only package. The Duel UI embedded spectator path is also left alone for now; the dedicated spectator app should be proven in live testing first, exactly as planned.
+No Duel-Bot files are included in this Repo 9 patch.

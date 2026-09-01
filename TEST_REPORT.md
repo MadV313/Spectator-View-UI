@@ -1,46 +1,52 @@
-# SV13 Repo 9 — Test Report
+# SV13 Repo 9 — Live-fix test report
 
-## Automated validation
+## Automated result
 
-Result: **PASS — 12/12 contract tests**
+**PASS — 13/13 contract tests**
 
-Command: `npm test`
+Command:
 
-Covered automatically:
+`npm test`
 
-1. Only `GET /duel/:session/spectator` is used for duel state.
-2. Viewer token is not used for Player 1/2 identity or private state fetching.
-3. Render invalidation includes session revision and public field-card identity/signature.
-4. Socket.IO uses `/spectator-chat` and the current `join_room/history/presence/typing/message/chat_message` contract.
-5. Spectator count comes from server presence/state instead of a client-forced value.
-6. Legacy `ME`, `sv13.me`, and GitHub production routing are absent.
-7. BGM has one initialization path and the corrected localStorage key.
-8. Practice CSS targets `body.practice-mode` correctly.
-9. Canonical card manifest contains all cards `000` through `127`, including the card back and Combat Boots.
-10. Winner rendering is single-source and uses server winner/status rather than HP inference.
-11. Chat/history/presence/typing/message traffic is filtered to the requested session room.
-12. GitHub Pages custom-domain files target `spectate.sv13tcg.com`.
+Covered:
 
-Additional validation:
+1. only canonical `GET /duel/:session/spectator` state loading
+2. viewer token cannot select Player 1/Player 2 or private duel state
+3. revision + public field identity invalidates render cache
+4. exact `/spectator-chat` event contract
+5. server-driven spectator count
+6. legacy ME/GitHub UI routing remains removed
+7. one corrected BGM preference path
+8. corrected practice CSS selector
+9. all 000–127 card metadata plus verified Collection card asset host/card back
+10. linked spectator identity remains server-derived and cannot be browser-authored
+11. server-authoritative single winner UI
+12. room traffic stays scoped to the requested session
+13. GitHub Pages custom-domain files remain correct
+
+Additional checks:
 
 - `node --check scripts/spectatorview.js` — PASS
 - `node --check scripts/chatClient.js` — PASS
 - `node --check scripts/net-hygiene.js` — PASS
-- Forbidden legacy/protocol scan — PASS for `madv313.github.io`, `sv13.me`, `ME_BASE`, `/duel/current`, `/duel/state`, `chat:send`, `chat:message`, and `spectator:joined`.
+- stale asset-base scan — PASS (`sv13tcg.com/assets/cards` absent from production code)
+- stale card-back filename scan — PASS (`000_WinterlandDeathDeck_Back.png` absent from production runtime/manifest)
+- forbidden legacy protocol scan — PASS
 
-## Live smoke tests still required after deployment
+## Current external-contract verification
 
-These require real Duel-Bot sessions and browsers and therefore are intentionally not claimed as automated passes:
+The current Card-Collection-UI repository contains the live card assets under `images/cards`, including the verified `035_PlateCarrier_Defense.png` and the deployed card back `000_CardBack_Unique.png`.
 
-- Open two simultaneous duel sessions and confirm spectators/chat remain isolated by session.
-- Inspect the spectator network payload in DevTools and confirm no hand identities or future deck order are present.
-- Invalid/expired session shows unavailable and never falls back to another duel.
-- Unique practice session renders correctly.
-- PvP session renders both real player names from session metadata.
-- Two spectators verify chat history, presence count, typing indicator, and messages.
-- Finish a match and confirm exactly one winner overlay.
-- Replace a public field card while the field count stays the same and confirm the card redraws.
+The current Duel-Bot source resolves `join_room` viewer tokens server-side to the linked Discord name before registering spectator presence/chat. Its current `/spectate` source also attempts to pass a linked token into the spectator URL.
 
-## Backend changes
+## Required live smoke test after deploying this ZIP
 
-None required for this Repo 9 frontend patch. The current Duel-Bot already exposes the canonical safe spectator serializer and `/spectator-chat` room contract consumed here.
+1. Open a fresh `/spectate` link and confirm the URL contains both `session=` and `token=` for a linked viewer.
+2. Confirm face-down cards display the Winterland card-back art instead of broken-image placeholders.
+3. Confirm visible field cards such as Plate Carrier/SVD render their real card art.
+4. Confirm chat header changes from `Resolving linked spectator…` to `Spectating as <DiscordName>` when the token is present.
+5. Send one chat message and confirm the rendered chat name is the linked Discord name.
+6. Open the same session without `token=` and confirm anonymous public spectating still works intentionally.
+7. Open two spectator browsers and confirm presence/chat/session data remain isolated and correct.
+
+If step 1 still produces no `token=` after the current Duel-Bot deployment, do not modify this Spectator UI again for that symptom; inspect the Duel-Bot link-generation/token-storage path next.
